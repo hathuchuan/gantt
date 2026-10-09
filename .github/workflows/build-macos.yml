@@ -1,0 +1,42 @@
+name: Build macOS app
+
+on:
+  push:
+    branches: ['**']
+    paths-ignore: ['**.md']
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build app + DMG
+        env:
+          BUILD_NUMBER: ${{ github.run_number }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          if [ -n "$RELEASE_TAG" ]; then export VERSION="${RELEASE_TAG#v}"; fi
+          ./macos/build.sh
+
+      - name: Self-test (mở app, kiểm tra cầu nối JS và lưu dữ liệu)
+        timeout-minutes: 3
+        run: '"macos/build/Academic Gantt.app/Contents/MacOS/AcademicGantt" --self-test'
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AcademicGantt-macOS
+          path: macos/build/*.dmg
+          if-no-files-found: error
+
+      - name: Đính kèm DMG vào Release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: macos/build/*.dmg

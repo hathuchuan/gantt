@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>vi</string>
+	<key>CFBundleExecutable</key>
+	<string>AcademicGantt</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.hathuchuan.academic-gantt</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>Academic Gantt</string>
+	<key>CFBundleDisplayName</key>
+	<string>Academic Gantt</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>3.0.0</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>11.0</string>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.productivity</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSPrincipalClass</key>
+	<string>NSApplication</string>
+	<key>NSHumanReadableCopyright</key>
+	<string>Academic Modular Gantt Planner</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>Academic Gantt đọc lịch dạy trong ứng dụng Lịch (Calendar) để tự tạo các mốc giảng dạy trên Gantt.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>Academic Gantt đọc lịch dạy trong ứng dụng Lịch (Calendar) để tự tạo các mốc giảng dạy trên Gantt.</string>
+</dict>
+</plist>
