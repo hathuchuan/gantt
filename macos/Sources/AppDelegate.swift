@@ -462,8 +462,31 @@ extension AppDelegate: WKScriptMessageHandlerWithReply {
             }
             return .success(["name": url.lastPathComponent, "content": text])
         } catch {
+            if isPermissionError(error) {
+                return .failure(BridgeError(code: "permission", message: permissionHint(reading: true)))
+            }
             return .failure(BridgeError(code: "failed", message: "Không đọc được tệp: \(error.localizedDescription)"))
         }
+    }
+
+    /// macOS bảo vệ riêng Downloads / Desktop / Documents: nếu người dùng đã từ chối cấp quyền thì đọc/ghi tệp ở đó bị chặn.
+    static func isPermissionError(_ error: Error) -> Bool {
+        func check(_ ns: NSError) -> Bool {
+            if ns.domain == NSCocoaErrorDomain && (ns.code == 257 || ns.code == 513) { return true }   // đọc / ghi không có quyền
+            if ns.domain == NSPOSIXErrorDomain && (ns.code == Int(EPERM) || ns.code == Int(EACCES)) { return true }
+            return false
+        }
+        let ns = error as NSError
+        if check(ns) { return true }
+        if let underlying = ns.userInfo[NSUnderlyingErrorKey] as? NSError { return check(underlying) }
+        return false
+    }
+
+    static func permissionHint(reading: Bool) -> String {
+        let verb = reading ? "đọc" : "ghi"
+        return "macOS chưa cho phép Academic Gantt \(verb) tệp trong thư mục này (Downloads, Desktop, Documents được bảo vệ riêng).\n"
+            + "Cách xử lý: vào System Settings → Privacy & Security → Files & Folders (hoặc Full Disk Access), bật Academic Gantt rồi thử lại; "
+            + "hoặc chọn một thư mục không bị bảo vệ, ví dụ thư mục Home."
     }
 
     static func decodeText(_ data: Data) -> String? {
@@ -489,7 +512,11 @@ extension AppDelegate: WKScriptMessageHandlerWithReply {
                 try Data(content.utf8).write(to: url, options: .atomic)
                 reply(.success(true))
             } catch {
-                reply(.failure(BridgeError(code: "failed", message: error.localizedDescription)))
+                if AppDelegate.isPermissionError(error) {
+                    reply(.failure(BridgeError(code: "permission", message: AppDelegate.permissionHint(reading: false))))
+                } else {
+                    reply(.failure(BridgeError(code: "failed", message: error.localizedDescription)))
+                }
             }
         }
     }

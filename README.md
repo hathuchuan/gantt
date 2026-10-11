@@ -37,6 +37,7 @@ Cách app giữ dữ liệu an toàn:
 
 - Mỗi lần lưu, app chỉ báo **💾 Đã lưu hh:mm:ss** (góc trên bên phải) sau khi dữ liệu đã nằm trên đĩa. Nếu không ghi được, chỉ báo chuyển đỏ **⚠️ Chưa lưu được dữ liệu**; khi đó hãy bấm **Xuất JSON** để sao lưu thủ công.
 - Cứ 5 giây, khi app mất focus và khi thoát, app kéo thêm trạng thái trong bộ nhớ của trang ra đĩa (lưới an toàn).
+- Ngoài `storage.json`, trang còn giữ một bản dự phòng trong bộ nhớ của WebView (`~/Library/WebKit/com.hathuchuan.academic-gantt`). Nếu `storage.json` và `backups/` đều mất, app tự lấy lại từ bản dự phòng này. Vì vậy, muốn **xóa sạch** dữ liệu hãy dùng nút **🔄 Khôi Phục Mẫu**; chỉ xóa thư mục `AcademicGantt` thì dữ liệu sẽ được khôi phục lại từ bản dự phòng.
 - **Tải lại trang** (`⌘R`) và khi tiến trình web bị dừng, trang luôn được nạp với bản mới nhất trên đĩa, không quay về bản lúc mở app.
 - `storage.json` thiếu / hỏng / rỗng mà đã có bản sao lưu → app tự khôi phục từ bản sao lưu mới nhất.
 - Dữ liệu đã lưu nhưng không đọc được → bản gốc được cất nguyên vẹn ở khóa `academic_smart_gantt_unreadable_<thời gian>` trong `storage.json` và app báo cho bạn; app **không** lặng lẽ thay bằng dữ liệu mẫu rồi ghi đè.

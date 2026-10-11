@@ -28,17 +28,22 @@ fail() { say "FAIL $*"; failures=$((failures + 1)); }
 pass() { say "PASS $*"; }
 
 # Chạy lệnh có giới hạn thời gian (macOS không có sẵn `timeout`). Trả về mã thoát của lệnh.
+# Thăm dò từng 0,2 giây thay vì để tiến trình `sleep` canh giờ chạy nền (tránh để lại tiến trình mồ côi).
 run_limited() {
   local seconds="$1"; shift
   "$@" &
   local pid=$!
-  ( sleep "$seconds"; kill -9 "$pid" 2>/dev/null ) &
-  local watcher=$!
-  wait "$pid"
-  local rc=$?
-  kill "$watcher" 2>/dev/null
-  wait "$watcher" 2>/dev/null
-  return $rc
+  local ticks=0 limit=$((seconds * 5))
+  while kill -0 "$pid" 2>/dev/null; do
+    if [ "$ticks" -ge "$limit" ]; then
+      kill -9 "$pid" 2>/dev/null
+      break
+    fi
+    sleep 0.2
+    ticks=$((ticks + 1))
+  done
+  wait "$pid" 2>/dev/null
+  return $?
 }
 
 # launch <tệp log> <tham số app...>   (chờ tới khi app thoát; ghi stdout vào tệp log)

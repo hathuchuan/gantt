@@ -95,7 +95,7 @@ extension AppDelegate {
                 for (name, ok) in self.checkReadTextFile() { checks[name] = ok }
                 let required = ["bridge", "nativePicker", "bootState", "nativePanel", "ping", "acked", "saveStatusOk",
                                 "backup", "storageFileWritten", "backupFile", "logWritten",
-                                "readUTF8", "readUTF8BOM", "readUTF16", "readMissingFails"]
+                                "readUTF8", "readUTF8BOM", "readUTF16", "readMissingFails", "readPermissionHint", "permissionMapping"]
                 let passed = required.allSatisfy { (checks[$0] as? Bool) == true } && ((checks["courses"] as? Int) ?? 0) > 0
                 self.finishPhase(passed: passed, "\(checks)")
             }
@@ -122,6 +122,22 @@ extension AppDelegate {
         var missingFails = false
         if case .failure = AppDelegate.readTextFile(at: dir.appendingPathComponent("khong-ton-tai.json")) { missingFails = true }
         out["readMissingFails"] = missingFails
+
+        // Tệp không đọc được vì thiếu quyền (mô phỏng bằng chmod 000): phải trả về lỗi "permission" kèm hướng dẫn.
+        let locked = dir.appendingPathComponent("locked.json")
+        try? Data("{}".utf8).write(to: locked)
+        chmod(locked.path, 0o000)
+        var permissionReported = false
+        if case .failure(let error) = AppDelegate.readTextFile(at: locked) {
+            permissionReported = error.code == "permission" && error.message.contains("Files & Folders")
+        }
+        chmod(locked.path, 0o644)
+        out["readPermissionHint"] = permissionReported
+        out["permissionMapping"] =
+            AppDelegate.isPermissionError(NSError(domain: NSCocoaErrorDomain, code: 257))
+            && AppDelegate.isPermissionError(NSError(domain: NSCocoaErrorDomain, code: 513))
+            && AppDelegate.isPermissionError(NSError(domain: NSPOSIXErrorDomain, code: 13))
+            && !AppDelegate.isPermissionError(NSError(domain: NSCocoaErrorDomain, code: 260))
         return out
     }
 
