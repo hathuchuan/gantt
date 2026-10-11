@@ -19,6 +19,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var storage: StorageMirror!
     private let calendarBridge = CalendarBridge()
 
+    private var snapshotTimer: Timer?
+
     private let isSelfTest = CommandLine.arguments.contains("--self-test")
     private var selfTestFinished = false
 
@@ -33,6 +35,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         buildMainMenu()
         createWindow()
         loadPage()
+        startSnapshotTimer()
         if isSelfTest {
             DispatchQueue.main.asyncAfter(deadline: .now() + 60) { [weak self] in
                 self?.finishSelfTest(passed: false, detail: "timeout")
@@ -49,8 +52,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        guard let webView = webView, let storage = storage else { return .terminateNow }
-        // Một lượt gọi JS khứ hồi bảo đảm các tin nhắn lưu dữ liệu gửi trước đó đã tới nơi.
+        guard webView != nil, let storage = storage else { return .terminateNow }
+        snapshotTimer?.invalidate()
+        // Chụp toàn bộ localStorage lần cuối (đồng thời bảo đảm các tin nhắn lưu đã tới nơi), rồi ghi ra đĩa.
         var replied = false
         let finish = {
             guard !replied else { return }
@@ -58,9 +62,52 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             storage.waitUntilFlushed()
             sender.reply(toApplicationShouldTerminate: true)
         }
-        webView.evaluateJavaScript("1") { _, _ in finish() }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { finish() }
+        snapshotStorage { finish() }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { finish() }
         return .terminateLater
+    }
+
+    // MARK: - Lưu dữ liệu bền vững
+
+    // Lưới an toàn: ngoài việc ghi theo từng lần setItem, cứ vài giây lại chụp toàn bộ localStorage
+    // của trang ra tệp, và chụp lần cuối khi thoát hoặc khi app mất focus.
+    private static let snapshotScript = """
+    (function () {
+      var o = {};
+      try {
+        for (var i = 0; i < localStorage.length; i++) {
+          var k = localStorage.key(i);
+          o[k] = localStorage.getItem(k);
+        }
+      } catch (e) {}
+      return JSON.stringify(o);
+    })()
+    """
+
+    private func snapshotStorage(completion: (() -> Void)? = nil) {
+        guard let webView = webView, let storage = storage else {
+            completion?()
+            return
+        }
+        webView.evaluateJavaScript(AppDelegate.snapshotScript) { result, _ in
+            if let text = result as? String,
+               let data = text.data(using: .utf8),
+               let entries = (try? JSONSerialization.jsonObject(with: data)) as? [String: String] {
+                storage.merge(entries)
+            }
+            completion?()
+        }
+    }
+
+    private func startSnapshotTimer() {
+        guard !isSelfTest else { return }
+        snapshotTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
+            self?.snapshotStorage()
+        }
+    }
+
+    func applicationDidResignActive(_ notification: Notification) {
+        snapshotStorage()
     }
 
     // MARK: - Cửa sổ & WebView
@@ -255,6 +302,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         var r = {};
         r.title = document.title;
         r.bridge = !!(window.GanttNative && typeof GanttNative.fetchEvents === 'function');
+        r.nativePicker = typeof GanttNative.openTextFile === 'function' && typeof GanttNative.saveState === 'function';
+        r.bootState = !!GanttNative.bootState && GanttNative.bootState.__selftest_seed === 'ok';
         r.seedRestored = localStorage.getItem('__selftest_seed') === 'ok';
         r.courses = (typeof courses !== 'undefined' && Array.isArray(courses)) ? courses.length : -1;
         var picker = document.getElementById('macCalendarPicker');
@@ -262,7 +311,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         var pong = await window.webkit.messageHandlers.gantt.postMessage({ cmd: 'ping' });
         r.ping = !!(pong && pong.ok);
         localStorage.setItem('__selftest_write', 'ok');
-        await new Promise(function (resolve) { setTimeout(resolve, 300); });
+        GanttNative.saveState('__selftest_explicit', 'ok');
+        await new Promise(function (resolve) { setTimeout(resolve, 500); });
         return JSON.stringify(r);
         """
         webView.callAsyncJavaScript(script, arguments: [:], in: nil, in: .page) { [weak self] result in
@@ -274,9 +324,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 var checks = ((try? JSONSerialization.jsonObject(with: Data(((value as? String) ?? "{}").utf8))) as? [String: Any]) ?? [:]
                 self.storage.waitUntilFlushed()
                 let fileText = (try? String(contentsOf: self.storage.file, encoding: .utf8)) ?? ""
-                checks["storageFileWritten"] = fileText.contains("__selftest_write")
+                checks["storageFileWritten"] = fileText.contains("__selftest_write") && fileText.contains("__selftest_explicit")
                 checks["calendarAuthStatus"] = CalendarBridge.authorizationStatusDescription
-                let required = ["bridge", "seedRestored", "nativePanel", "ping", "storageFileWritten"]
+                let required = ["bridge", "nativePicker", "bootState", "seedRestored", "nativePanel", "ping", "storageFileWritten"]
                 let passed = required.allSatisfy { (checks[$0] as? Bool) == true } && ((checks["courses"] as? Int) ?? 0) > 0
                 self.finishSelfTest(passed: passed, detail: "\(checks)")
             }
@@ -348,12 +398,39 @@ extension AppDelegate: WKScriptMessageHandlerWithReply {
                 NSWorkspace.shared.open(url)
             }
             reply(.success(true))
+        case "openTextFile":
+            openTextFile(extensions: body["extensions"] as? [String] ?? [], reply: reply)
         case "saveTextFile":
             saveTextFile(name: body["fileName"] as? String ?? "export.txt",
                          content: body["content"] as? String ?? "",
                          reply: reply)
         default:
             reply(.failure(BridgeError(code: "unsupported", message: "Lệnh không được hỗ trợ: \(cmd)")))
+        }
+    }
+
+    private func openTextFile(extensions: [String], reply: @escaping (Result<Any, BridgeError>) -> Void) {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        if !extensions.isEmpty { panel.allowedFileTypes = extensions }
+        panel.beginSheetModal(for: window) { response in
+            guard response == .OK, let url = panel.url else {
+                reply(.success(false))
+                return
+            }
+            do {
+                let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+                guard size <= 20_000_000 else {
+                    reply(.failure(BridgeError(code: "too_large", message: "Tệp quá lớn (tối đa 20 MB).")))
+                    return
+                }
+                let content = try String(contentsOf: url, encoding: .utf8)
+                reply(.success(["name": url.lastPathComponent, "content": content]))
+            } catch {
+                reply(.failure(BridgeError(code: "failed", message: "Không đọc được tệp: \(error.localizedDescription)")))
+            }
         }
     }
 

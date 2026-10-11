@@ -44,34 +44,69 @@ final class StorageMirror {
 
     func set(_ key: String, _ value: String) {
         queue.async {
+            guard self.values[key] != value else { return }
             self.values[key] = value
-            self.flush()
+            self.scheduleFlush()
         }
     }
 
     func remove(_ key: String) {
         queue.async {
-            self.values.removeValue(forKey: key)
-            self.flush()
+            guard self.values.removeValue(forKey: key) != nil else { return }
+            self.scheduleFlush()
         }
     }
 
     func clear() {
         queue.async {
+            guard !self.values.isEmpty else { return }
             self.values.removeAll()
-            self.flush()
+            self.scheduleFlush()
         }
     }
 
-    /// Chờ mọi thao tác ghi đang xếp hàng hoàn tất.
+    /// Gộp nhiều khóa cùng lúc (ảnh chụp localStorage). Chỉ thêm/cập nhật, không bao giờ xóa khóa.
+    func merge(_ entries: [String: String]) {
+        queue.async {
+            var changed = false
+            for (key, value) in entries where self.values[key] != value {
+                self.values[key] = value
+                changed = true
+            }
+            if changed { self.scheduleFlush() }
+        }
+    }
+
+    /// Ghi ngay mọi thay đổi còn chờ rồi mới trả về (dùng khi thoát app).
     func waitUntilFlushed() {
-        queue.sync {}
+        queue.sync {
+            self.pendingFlush?.cancel()
+            self.pendingFlush = nil
+            if self.dirty { self.flush() }
+        }
+    }
+
+    // Gộp các lần ghi dồn dập (mỗi phím gõ đều lưu) thành một lần ghi sau 0,2 giây.
+    private var dirty = false
+    private var pendingFlush: DispatchWorkItem?
+
+    private func scheduleFlush() {
+        dirty = true
+        guard pendingFlush == nil else { return }
+        let item = DispatchWorkItem { [weak self] in
+            guard let self = self else { return }
+            self.pendingFlush = nil
+            if self.dirty { self.flush() }
+        }
+        pendingFlush = item
+        queue.asyncAfter(deadline: .now() + 0.2, execute: item)
     }
 
     private func flush() {
         do {
             let data = try JSONSerialization.data(withJSONObject: values, options: [.prettyPrinted, .sortedKeys])
             try data.write(to: file, options: .atomic)
+            dirty = false
         } catch {
             NSLog("AcademicGantt: không ghi được dữ liệu: \(error)")
         }

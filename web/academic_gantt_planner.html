@@ -245,6 +245,55 @@
       color: #ffffff;
       border: 1px solid #991b1b;
     }
+    .countdown-badge.review {
+      background: #fffbeb;
+      color: #b45309;
+      border: 1px solid #fcd34d;
+    }
+    .countdown-badge.rejected {
+      background: #f1f5f9;
+      color: #475569;
+      border: 1px solid #94a3b8;
+    }
+
+    /* Danh sách công việc trong ô Tải công việc: mỗi công việc 1 dòng, màu theo công đoạn */
+    .alert-box.normal .congestion-list { border-top-color: #cbd5e1; color: #334155; }
+    .workload-list { margin: 4px 0 0; padding-left: 22px; font-size: 12px; line-height: 1.6; }
+    .workload-list li { margin-bottom: 2px; font-weight: 600; }
+    .workload-list li .wl-stage {
+      display: inline-block; font-size: 10px; font-weight: 700; line-height: 15px;
+      padding: 0 6px; margin-right: 5px; border-radius: 8px; border: 1px solid currentColor;
+    }
+    .workload-list li .wl-detail { font-weight: 400; opacity: 0.85; }
+    .workload-list li.wl-macro  { color: #6d28d9; }
+    .workload-list li.wl-prep   { color: #c2410c; }
+    .workload-list li.wl-teach  { color: #1d4ed8; }
+    .workload-list li.wl-eval   { color: #047857; }
+    .workload-list li.wl-submit { color: #be185d; }
+    .workload-list li.wl-deliv  { color: #a16207; }
+
+    /* Cảnh báo khối công việc quá ngày mà chưa hoàn thành */
+    .overdue-box {
+      margin-top: 8px; padding: 7px 9px; border: 1px solid #fdba74; border-left: 4px solid #f59e0b;
+      background: #fffbeb; border-radius: 8px; font-size: 11px;
+    }
+    .overdue-box .overdue-title { font-weight: 700; color: #b45309; }
+    .overdue-box .workload-list { max-height: 150px; overflow-y: auto; }
+    .overdue-box .workload-list li { cursor: pointer; }
+    .overdue-box .workload-list li:hover { text-decoration: underline; }
+    .overdue-late { color: #dc2626; font-weight: 700; }
+    .bar.is-overdue {
+      outline: 2px dashed #f59e0b; outline-offset: 1px; animation: overduePulse 2s infinite;
+    }
+    @keyframes overduePulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.6); }
+      50% { box-shadow: 0 0 0 5px rgba(245, 158, 11, 0); }
+    }
+    .bar .overdue-badge {
+      display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+      background: #f59e0b; color: #fff; border-radius: 50%; width: 14px; height: 14px;
+      font-size: 10px; font-weight: 800; text-decoration: none;
+    }
 
     .card {
       background: var(--bg-card);
@@ -1005,8 +1054,8 @@
         🚫 Đã chặn xóa (0)
       </button>
       <button type="button" class="btn btn-secondary" onclick="exportData()">📥 Xuất JSON</button>
-      <button type="button" class="btn btn-secondary" onclick="document.getElementById('importJsonFile').click()">📤 Nạp JSON</button>
-      <input type="file" id="importJsonFile" style="display:none" onchange="importJsonData(event)">
+      <button type="button" class="btn btn-secondary" onclick="pickImportJson()">📤 Nạp JSON</button>
+      <input type="file" id="importJsonFile" accept=".json,application/json" style="display:none" onchange="importJsonData(event)">
       <button type="button" class="btn btn-danger" onclick="resetSample()">🔄 Khôi Phục Mẫu</button>
     </div>
   </header>
@@ -1044,6 +1093,7 @@
           </div>
         </div>
         <div id="congestionDetails" class="congestion-list" style="display:none;"></div>
+        <div id="overdueAlertBox" class="overdue-box" style="display:none;"></div>
       </div>
 
       <!-- 2. SECTION RIÊNG TRÊN SIDEBAR: NGHIÊN CỨU & TƯ VẤN -->
@@ -1110,6 +1160,7 @@
                   <option value="LTK">LTK</option>
                   <option value="FPT Tower">FPT Tower</option>
                   <option value="Keangnam">Keangnam</option>
+                  <option value="Online">Online</option>
                   <option value="Khác">Khác (Tự điền...)</option>
                 </select>
               </div>
@@ -1120,6 +1171,7 @@
                   <select id="commonDurationHours" class="form-control" style="width:95px; padding:5px 6px;">
                     <option value="3" selected>3 tiếng</option>
                     <option value="2">2 tiếng</option>
+                    <option value="1">1 tiếng</option>
                   </select>
                 </div>
               </div>
@@ -1171,6 +1223,7 @@
             <div class="form-group">
               <label>Chọn tệp lịch .ics (Tự động đọc cả Địa điểm & Giờ học)</label>
               <input type="file" id="icalFileInput" class="form-control" accept=".ics">
+              <div id="icalPickedName" style="font-size:11px; color:#059669; font-weight:600; margin-top:4px;"></div>
             </div>
             <button type="button" class="btn btn-primary" style="width: 100%;" onclick="processIcalImport()">📂 Nạp File iCal & Sinh Lịch</button>
           </div>
@@ -1378,18 +1431,20 @@
                 <option value="LTK">LTK</option>
                 <option value="FPT Tower">FPT Tower</option>
                 <option value="Keangnam">Keangnam</option>
+                <option value="Online">Online</option>
                 <option value="Khác">Khác (Tự điền...)</option>
               </select>
               <input type="text" id="editLocationCustom" class="form-control" placeholder="Nhập địa điểm..." style="display:none;" oninput="handleEditCourseLocationTimeChange()">
             </div>
           </div>
           <div class="form-group" style="margin-bottom:4px;">
-            <label>Giờ bắt đầu & Thời lượng (Mặc định 3 tiếng, có thể chỉnh 2 tiếng)</label>
+            <label>Giờ bắt đầu & Thời lượng (3 / 2 / 1 tiếng)</label>
             <div style="display:flex; gap:6px;">
               <input type="time" id="editStartTime" class="form-control" value="18:00" oninput="handleEditCourseLocationTimeChange()">
               <select id="editDurationHours" class="form-control" style="width:120px;" onchange="handleEditCourseLocationTimeChange()">
                 <option value="3">3 tiếng</option>
                 <option value="2">2 tiếng</option>
+                <option value="1">1 tiếng</option>
               </select>
             </div>
           </div>
@@ -1483,6 +1538,14 @@
           <label>Tên Journal chung:</label>
           <input type="text" class="form-control" id="editJournalName" placeholder="VD: EJOR, Management Science..." oninput="liveUpdateResearchFromModal()">
         </div>
+        <div class="form-group" style="margin:8px 0 0;">
+          <label>Trạng thái dự án:</label>
+          <select id="editReviewStatus" class="form-control" onchange="handleReviewStatusChange()">
+            <option value="">📅 Theo hạn Submit (mặc định)</option>
+            <option value="under_review">⏳ Chờ review — đã submit, chờ journal quyết định</option>
+            <option value="rejected">❌ Rejected — chưa có hạn Submit tiếp theo</option>
+          </select>
+        </div>
       </div>
 
       <div class="modal-section">
@@ -1543,7 +1606,14 @@
   // =========================================================================
   // 1. CÁC HÀM TIỆN ÍCH CỐT LÕI & XỬ LÝ ĐỊA ĐIỂM / THỜI GIAN
   // =========================================================================
-  var PRESET_LOCATIONS = ["Mỹ Đình", "LTK", "FPT Tower", "Keangnam"];
+  var PRESET_LOCATIONS = ["Mỹ Đình", "LTK", "FPT Tower", "Keangnam", "Online"];
+
+  // Thời lượng buổi học chỉ có 3 mức: 3, 2 hoặc 1 tiếng (giá trị lạ -> làm tròn về mức gần nhất)
+  function clampDuration(h, fallback) {
+    var n = Math.round(parseFloat(h));
+    if (isNaN(n)) return fallback || 3;
+    return n <= 1 ? 1 : (n >= 3 ? 3 : 2);
+  }
 
   function capitalize(str) {
     if (!str) return '';
@@ -1586,6 +1656,9 @@
       };
     }
     var lower = clean.toLowerCase();
+    if (/\bonline\b|\bzoom\b|\bteams\b|google meet|meet\.google|\bwebex\b|trực tuyến|truc tuyen/.test(lower)) {
+      return { locationType: "Online", locationCustom: "" };
+    }
     if (lower.indexOf('mỹ đình') !== -1 || lower.indexOf('my dinh') !== -1) {
       return { locationType: "Mỹ Đình", locationCustom: "" };
     }
@@ -1623,8 +1696,7 @@
 
   function formatTimeRange(startTime, durationHours) {
     var st = String(startTime || "18:00").trim();
-    var dur = parseInt(durationHours, 10);
-    if (dur !== 2 && dur !== 3) dur = 3;
+    var dur = clampDuration(durationHours, 3);
     var parts = st.split(':');
     if (parts.length < 2) return st + ' (' + dur + 'h)';
     var h = parseInt(parts[0], 10);
@@ -1644,7 +1716,7 @@
     var lType = locSelEl ? locSelEl.value : "Mỹ Đình";
     var lCustom = (lType === "Khác" && locCusEl) ? locCusEl.value.trim() : "";
     var sTime = (timeEl && timeEl.value) ? timeEl.value : "18:00";
-    var dHours = (durEl && parseInt(durEl.value, 10) === 2) ? 2 : 3;
+    var dHours = durEl ? clampDuration(durEl.value, 3) : 3;
 
     return {
       locationType: lType,
@@ -1751,9 +1823,21 @@
   // =========================================================================
   // 2. BỘ NHỚ LƯU VẾT DỰ ÁN ĐÃ XÓA (TOMBSTONE REGISTRY)
   // =========================================================================
+  // Trong ứng dụng macOS, dữ liệu trên đĩa (bootState) là nguồn chuẩn; trình duyệt thì dùng localStorage.
+  function readStored(key) {
+    var boot = window.GanttNative && window.GanttNative.bootState;
+    if (boot && typeof boot[key] === 'string') return boot[key];
+    try { return localStorage.getItem(key); } catch (e) { return null; }
+  }
+
+  function writeStored(key, json) {
+    try { localStorage.setItem(key, json); } catch (e) {}
+    if (window.GanttNative && typeof window.GanttNative.saveState === 'function') window.GanttNative.saveState(key, json);
+  }
+
   var deletedRegistry = [];
   try {
-    var savedDel = localStorage.getItem('academic_smart_gantt_deleted');
+    var savedDel = readStored('academic_smart_gantt_deleted');
     if (savedDel) {
       var parsedDel = JSON.parse(savedDel);
       if (Array.isArray(parsedDel)) deletedRegistry = parsedDel;
@@ -1764,7 +1848,7 @@
 
   function saveDeletedRegistry() {
     try {
-      localStorage.setItem('academic_smart_gantt_deleted', JSON.stringify(deletedRegistry));
+      writeStored('academic_smart_gantt_deleted', JSON.stringify(deletedRegistry));
     } catch (e) {}
     updateBlockedButtonUI();
   }
@@ -1833,6 +1917,8 @@
     if (!c) return false;
 
     if (isResearchCourse(c)) {
+      // Đang chờ journal quyết định / đã bị Rejected thì dự án chưa kết thúc
+      if (c.reviewStatus) return false;
       if (!c.submissions || c.submissions.length === 0) return false;
       return c.submissions.every(function(sub) { return !!sub.done; });
     }
@@ -1865,6 +1951,19 @@
     }
 
     return hasAnyBlock;
+  }
+
+  function getReviewStatusInfo(c) {
+    if (!c || !isResearchCourse(c) || !c.reviewStatus) return null;
+    var last = '';
+    (c.submissions || []).forEach(function(sub) { if (sub.date && sub.date > last) last = sub.date; });
+    if (c.reviewStatus === 'under_review') {
+      return { label: '⏳ Chờ review', cls: 'review', color: '#b45309', text: '⏳ Chờ review — đã submit, chờ journal quyết định', lastDate: last };
+    }
+    if (c.reviewStatus === 'rejected') {
+      return { label: '❌ Rejected', cls: 'rejected', color: '#475569', text: '❌ Rejected — chưa có hạn Submit tiếp theo', lastDate: last };
+    }
+    return null;
   }
 
   function getNextUpcomingSubmission(c, todayStr) {
@@ -1985,11 +2084,12 @@
       safe.hasEvaluation = safe.hasEvaluation !== false;
       safe.journalName = safe.journalName || '';
       safe.clientName = safe.clientName || '';
+      safe.reviewStatus = (safe.reviewStatus === 'under_review' || safe.reviewStatus === 'rejected') ? safe.reviewStatus : '';
 
       safe.locationType = safe.locationType || "Mỹ Đình";
       safe.locationCustom = safe.locationCustom || "";
       safe.startTime = safe.startTime || "18:00";
-      safe.durationHours = (parseInt(safe.durationHours, 10) === 2) ? 2 : 3;
+      safe.durationHours = clampDuration(safe.durationHours, 3);
 
       if (!Array.isArray(safe.sessions)) safe.sessions = [];
       safe.sessions = safe.sessions.map(function(s, sIdx) {
@@ -2003,7 +2103,7 @@
           locationType: sObj.locationType || safe.locationType || "Mỹ Đình",
           locationCustom: sObj.locationCustom !== undefined ? sObj.locationCustom : (safe.locationCustom || ""),
           startTime: sObj.startTime || safe.startTime || "18:00",
-          durationHours: (parseInt(sObj.durationHours, 10) === 2) ? 2 : (safe.durationHours || 3),
+          durationHours: clampDuration(sObj.durationHours, safe.durationHours || 3),
           note: sObj.note || '',
           prepDone: !!sObj.prepDone,
           teachDone: !!sObj.teachDone
@@ -2066,7 +2166,7 @@
 
   var courses = [];
   try {
-    var saved = localStorage.getItem('academic_smart_gantt');
+    var saved = readStored('academic_smart_gantt');
     courses = saved ? normalizeCourses(JSON.parse(saved)) : normalizeCourses(SAMPLE_DATA);
   } catch (err) {
     courses = normalizeCourses(SAMPLE_DATA);
@@ -2111,7 +2211,7 @@
         c.sessions.forEach(function(s, sIdx) {
           if (s.teachDate === dateStr) {
             var stTime = s.startTime || c.startTime || "18:00";
-            var durH = (parseInt(s.durationHours || c.durationHours, 10) === 2) ? 2 : 3;
+            var durH = clampDuration(s.durationHours || c.durationHours, 3);
             var startMin = parseTimeToMinutes(stTime);
             var endMin = startMin + (durH * 60);
             var locText = getDisplayLocation(s.locationType || c.locationType, s.locationCustom !== undefined ? s.locationCustom : c.locationCustom);
@@ -2669,6 +2769,7 @@
 
     if (isResearchCourse(c)) {
       if (c.submissions) c.submissions.forEach(function(sub) { sub.done = targetState; });
+      if (targetState) c.reviewStatus = '';
     } else if (isConsultingCourse(c)) {
       if (c.deliverables) c.deliverables.forEach(function(deliv) { deliv.done = targetState; });
     } else {
@@ -2714,11 +2815,15 @@
       researchItems.forEach(function(c) {
         var allDone = isCourseFullyCompleted(c);
         var nextInfo = getNextUpcomingSubmission(c, todayStr);
+        var rvInfo = getReviewStatusInfo(c);
         var badgeText = '';
         var badgeClass = 'countdown-badge research';
         var subTargetTitle = '';
 
-        if (allDone) {
+        if (rvInfo) {
+          badgeText = rvInfo.label;
+          badgeClass = 'countdown-badge ' + rvInfo.cls;
+        } else if (allDone) {
           badgeText = '✓ Đã hoàn thành';
           badgeClass = 'countdown-badge urgent';
         } else if (!nextInfo || !nextInfo.sub) {
@@ -2743,7 +2848,7 @@
           '<div class="countdown-item' + (allDone ? ' is-completed-item' : '') + '" onclick="openModal(\'' + c.id + '\')" style="cursor:pointer;" title="Nhấp để chỉnh sửa">' +
             '<div style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' +
               '<strong style="color:#0f172a;">' + escapeHtml(c.name) + '</strong>' +
-              '<div style="font-size:10px; color:var(--text-muted);">Hạn kế tiếp: ' + targetDateStr + journalTag + '</div>' +
+              '<div style="font-size:10px; color:var(--text-muted);">' + (rvInfo ? ('Submit gần nhất: ' + (rvInfo.lastDate ? formatVNDate(rvInfo.lastDate) : '—')) : ('Hạn kế tiếp: ' + targetDateStr)) + journalTag + '</div>' +
             '</div>' +
             '<span class="' + badgeClass + '">' + badgeText + '</span>' +
           '</div>';
@@ -2834,77 +2939,159 @@
     var backTodayBtn = document.getElementById('btnWorkloadBackToday');
     if (backTodayBtn) backTodayBtn.style.display = isFocusToday ? 'none' : 'inline-block';
 
-    var prepCourses = [];
-    var teachingCourses = [];
-    var gradingCourses = [];
+    var prepCourseNames = {};
+    var teachingCount = 0;
+    var gradingCount = 0;
+    var workItems = [];
 
     courses.forEach(function(c) {
       if (isResearchCourse(c) || isConsultingCourse(c)) return;
       if (isCourseFullyCompleted(c)) return;
 
-      var isPrepping = false;
-      var prepReason = "";
-
       var macro = getCourseMacroDates(c);
       if (macro && !c.macroDone && focusStr >= macro.start && focusStr <= macro.end) {
-        isPrepping = true;
-        prepReason = "Chuẩn bị đề cương/học liệu toàn khóa";
+        workItems.push({ stage: 'macro', courseName: c.name, detail: 'Chuẩn bị đề cương/học liệu toàn khóa' });
+        prepCourseNames[c.id] = true;
       }
 
-      if (!isPrepping && c.sessions && c.sessions.length > 0) {
-        c.sessions.forEach(function(s) {
-          if (!s.prepDone && s.prepStart && s.teachDate && focusStr >= s.prepStart && focusStr < s.teachDate) {
-            isPrepping = true;
-            prepReason = "Soạn bài " + s.title;
-          }
-        });
-      }
-
-      if (isPrepping) prepCourses.push({ name: c.name, reason: prepReason });
+      (c.sessions || []).forEach(function(s) {
+        if (!s.prepDone && s.prepStart && s.teachDate && focusStr >= s.prepStart && focusStr < s.teachDate) {
+          workItems.push({ stage: 'prep', courseName: c.name, detail: 'Soạn bài ' + s.title + ' (dạy ' + formatVNDate(s.teachDate).slice(0, 5) + ')' });
+          prepCourseNames[c.id] = true;
+        }
+      });
 
       if (c.sessions && c.sessions.length > 0) {
         var firstDate = c.sessions[0].teachDate;
         var lastDate = c.sessions[c.sessions.length - 1].teachDate;
-        if (focusStr >= firstDate && focusStr <= lastDate) teachingCourses.push(c.name);
+        if (focusStr >= firstDate && focusStr <= lastDate) {
+          teachingCount++;
+          var todaySession = c.sessions.filter(function(s) { return s.teachDate === focusStr; })[0];
+          workItems.push({
+            stage: 'teach',
+            courseName: c.name,
+            detail: todaySession
+              ? ('Dạy ' + todaySession.title + ' · ' + formatTimeRange(todaySession.startTime || c.startTime, todaySession.durationHours || c.durationHours))
+              : 'Đang trong kỳ giảng dạy'
+          });
+        }
       }
 
       if (c.hasEvaluation !== false && c.evaluation && !c.evaluation.done && c.evaluation.start && c.evaluation.end) {
-        if (focusStr >= c.evaluation.start && focusStr <= c.evaluation.end) gradingCourses.push(c.name);
+        if (focusStr >= c.evaluation.start && focusStr <= c.evaluation.end) {
+          gradingCount++;
+          workItems.push({
+            stage: 'eval',
+            courseName: c.name,
+            detail: (c.evaluation.name || 'Chấm thi') + ' (' + formatVNDate(c.evaluation.start).slice(0, 5) + ' → ' + formatVNDate(c.evaluation.end).slice(0, 5) + ')'
+          });
+        }
       }
     });
 
-    document.getElementById('statPrepCourses').textContent = prepCourses.length;
-    document.getElementById('statTeachingCourses').textContent = teachingCourses.length;
-    document.getElementById('statGradingCourses').textContent = gradingCourses.length;
+    var prepCount = Object.keys(prepCourseNames).length;
+    var stageOrder = { macro: 0, prep: 1, teach: 2, eval: 3 };
+    workItems.sort(function(a, b) { return stageOrder[a.stage] - stageOrder[b.stage]; });
+
+    document.getElementById('statPrepCourses').textContent = prepCount;
+    document.getElementById('statTeachingCourses').textContent = teachingCount;
+    document.getElementById('statGradingCourses').textContent = gradingCount;
     document.getElementById('statTotalCourses').textContent = courses.length;
 
     var boxEl = document.getElementById('workloadAlertBox');
     var titleEl = document.getElementById('alertTitleText');
     var descEl = document.getElementById('alertDescText');
     var detailEl = document.getElementById('congestionDetails');
+    var listHtml = workItems.length
+      ? ('<strong>Công việc ' + focusLabel + ' (' + workItems.length + '):</strong>' + buildWorkListHtml(workItems))
+      : '';
 
-    if (prepCourses.length >= 3) {
+    if (prepCount >= 3) {
       boxEl.className = 'alert-box danger';
       titleEl.innerHTML = '🚨 CẢNH BÁO QUÁ TẢI (RED ALERT)';
-      descEl.innerHTML = (isFocusToday ? 'Đang có' : capitalize(focusLabel) + ' có') + ' <strong>' + prepCourses.length + ' lớp học</strong> cùng lúc trong giai đoạn chuẩn bị!';
-      var detailsHtml = '<strong>Danh sách lớp đang chuẩn bị:</strong><br>';
-      prepCourses.forEach(function(item, idx) {
-        detailsHtml += (idx + 1) + '. <strong>' + escapeHtml(item.name) + '</strong> (' + escapeHtml(item.reason) + ')<br>';
-      });
-      detailEl.innerHTML = detailsHtml;
+      descEl.innerHTML = (isFocusToday ? 'Đang có' : capitalize(focusLabel) + ' có') + ' <strong>' + prepCount + ' lớp học</strong> cùng lúc trong giai đoạn chuẩn bị!';
+      detailEl.innerHTML = listHtml;
       detailEl.style.display = 'block';
     } else {
       boxEl.className = 'alert-box normal';
       titleEl.innerHTML = '🟢 Tải Công Việc Ổn Định';
-      if (prepCourses.length > 0) {
-        descEl.innerHTML = (isFocusToday ? 'Hiện có' : capitalize(focusLabel) + ' có') + ' <strong>' + prepCourses.length + ' lớp</strong> đang trong giai đoạn chuẩn bị.';
-        detailEl.innerHTML = '<strong>Đang chuẩn bị:</strong> ' + prepCourses.map(function(x) { return escapeHtml(x.name) + ' (' + escapeHtml(x.reason) + ')'; }).join(' • ');
-        detailEl.style.display = 'block';
+      if (prepCount > 0) {
+        descEl.innerHTML = (isFocusToday ? 'Hiện có' : capitalize(focusLabel) + ' có') + ' <strong>' + prepCount + ' lớp</strong> đang trong giai đoạn chuẩn bị.';
       } else {
         descEl.innerHTML = 'Không có lớp học nào bị dồn lịch chuẩn bị ' + focusLabel + '.';
-        detailEl.style.display = 'none';
       }
+      detailEl.innerHTML = listHtml;
+      detailEl.style.display = listHtml ? 'block' : 'none';
     }
+
+    updateOverdueAlertBox();
+  }
+
+  // Mỗi công việc một dòng đánh số; màu chữ theo công đoạn (xem .workload-list ở phần CSS)
+  var WORK_STAGE_LABELS = { macro: 'Đề cương', prep: 'Soạn bài', teach: 'Giảng dạy', eval: 'Chấm thi', submit: 'Submit', deliv: 'Sản phẩm' };
+
+  function buildWorkListHtml(items, clickable) {
+    return '<ol class="workload-list">' + items.map(function(it) {
+      var onclick = (clickable && it.courseId) ? ' onclick="openModal(\'' + it.courseId + '\')" title="Nhấp để mở dự án"' : '';
+      return '<li class="wl-' + it.stage + '"' + onclick + '>' +
+        '<span class="wl-stage">' + (WORK_STAGE_LABELS[it.stage] || it.stage) + '</span>' +
+        '<strong>' + escapeHtml(it.courseName) + '</strong>' +
+        (it.detail ? ' <span class="wl-detail">— ' + escapeHtml(it.detail) + '</span>' : '') +
+        (it.extraHtml || '') +
+        '</li>';
+    }).join('') + '</ol>';
+  }
+
+  // Các khối công việc đã qua ngày kết thúc mà chưa được đánh dấu hoàn thành
+  function getOverdueBlocks() {
+    var today = getTodayStr();
+    var out = [];
+    function push(c, stage, label, endStr) {
+      if (!endStr || String(endStr) >= today) return;
+      out.push({ courseId: c.id, courseName: c.name, stage: stage, detail: label, endDate: endStr, daysLate: diffDaysRaw(endStr, today) });
+    }
+    courses.forEach(function(c) {
+      if (isResearchCourse(c)) {
+        if (c.reviewStatus) return;
+        (c.submissions || []).forEach(function(sub, i) {
+          if (!sub.done) push(c, 'submit', sub.title || ('Submit lần ' + (i + 1)), sub.date);
+        });
+      } else if (isConsultingCourse(c)) {
+        (c.deliverables || []).forEach(function(d, i) {
+          if (!d.done) push(c, 'deliv', d.title || ('Sản phẩm ' + (i + 1)), d.date);
+        });
+      } else {
+        var macro = getCourseMacroDates(c);
+        if (macro && !c.macroDone) push(c, 'macro', 'Chuẩn bị đề cương', addDays(macro.end, -1));
+        (c.sessions || []).forEach(function(s) {
+          var title = s.title || ('Buổi ' + s.num);
+          if (diffDaysRaw(s.prepStart, s.teachDate) > 0 && !s.prepDone) push(c, 'prep', 'Soạn bài ' + title, addDays(s.teachDate, -1));
+          if (!s.teachDone) push(c, 'teach', 'Dạy ' + title, s.teachDate);
+        });
+        if (c.hasEvaluation !== false && c.evaluation && c.evaluation.start && c.evaluation.end && !c.evaluation.done) {
+          push(c, 'eval', c.evaluation.name || 'Chấm thi', c.evaluation.end);
+        }
+      }
+    });
+    out.sort(function(a, b) { return String(a.endDate).localeCompare(String(b.endDate)); });
+    return out;
+  }
+
+  function updateOverdueAlertBox() {
+    var box = document.getElementById('overdueAlertBox');
+    if (!box) return;
+    var overdue = getOverdueBlocks();
+    if (overdue.length === 0) {
+      box.style.display = 'none';
+      box.innerHTML = '';
+      return;
+    }
+    var items = overdue.map(function(o) {
+      o.extraHtml = ' <span class="overdue-late">(quá ' + o.daysLate + ' ngày · hạn ' + formatVNDate(o.endDate).slice(0, 5) + ')</span>';
+      return o;
+    });
+    box.innerHTML = '<div class="overdue-title">⚠️ Quá ngày mà chưa hoàn thành (' + overdue.length + ')</div>' + buildWorkListHtml(items, true);
+    box.style.display = 'block';
   }
 
   // =========================================================================
@@ -3065,7 +3252,7 @@
 
   function processIcalImport() {
     var fileInput = document.getElementById('icalFileInput');
-    if (!fileInput.files || fileInput.files.length === 0) {
+    if (!pickedIcal && (!fileInput.files || fileInput.files.length === 0)) {
       alert('Vui lòng chọn một tệp .ics!');
       return;
     }
@@ -3076,8 +3263,8 @@
     var macroDays = parseInt(document.getElementById('commonMacroDaysRange').value, 10);
     if (isNaN(macroDays)) macroDays = 7;
 
-    reader.onload = function(e) {
-      var rawSessions = parseICS(e.target.result);
+    var onText = function(text) {
+      var rawSessions = parseICS(text);
       if (rawSessions.length === 0) {
         alert('Không tìm thấy sự kiện hợp lệ trong file .ics!');
         return;
@@ -3088,9 +3275,38 @@
         groupAndCreateCourses(rawSessions, hasEval, macroDays, false);
       }
       fileInput.value = '';
+      setPickedIcal(null);
       document.getElementById('commonCourseName').value = '';
     };
-    reader.readAsText(file);
+    if (pickedIcal) {
+      onText(pickedIcal.content);
+    } else {
+      reader.onload = function(e) { onText(e.target.result); };
+      reader.readAsText(file);
+    }
+  }
+
+  // Trong ứng dụng macOS: chọn tệp .ics bằng hộp thoại của hệ thống (đáng tin cậy hơn <input type=file> trong WebView)
+  var pickedIcal = null;
+
+  function setPickedIcal(file) {
+    pickedIcal = file;
+    var label = document.getElementById('icalPickedName');
+    if (label) label.textContent = file ? ('✓ Đã chọn: ' + file.name) : '';
+  }
+
+  function initNativeFilePickers() {
+    if (!hasNativeFilePicker()) return;
+    var input = document.getElementById('icalFileInput');
+    if (!input) return;
+    input.addEventListener('click', function(e) {
+      e.preventDefault();
+      window.GanttNative.openTextFile(['ics']).then(function(file) {
+        if (file && typeof file.content === 'string') setPickedIcal({ name: file.name || 'lịch.ics', content: file.content });
+      }).catch(function(err) {
+        alert('Không mở được tệp: ' + (err && err.message ? err.message : err));
+      });
+    });
   }
 
   function parseICS(icsContent) {
@@ -3116,7 +3332,7 @@
         if (curEvent.teachDate) {
           if (startHourNum !== null && endHourNum !== null) {
             var diffH = Math.round(endHourNum - startHourNum);
-            curEvent.durationHours = (diffH === 2) ? 2 : 3;
+            curEvent.durationHours = clampDuration(diffH, 3);
           }
           sessions.push(curEvent);
         }
@@ -3197,7 +3413,7 @@
 
   function getSavedMacCalendarIds() {
     try {
-      var arr = JSON.parse(localStorage.getItem(MAC_CAL_STORAGE_KEY) || 'null');
+      var arr = JSON.parse(readStored(MAC_CAL_STORAGE_KEY) || 'null');
       return Array.isArray(arr) ? arr : null;
     } catch (e) {
       return null;
@@ -3206,7 +3422,7 @@
 
   function saveMacCalendarSelection() {
     try {
-      localStorage.setItem(MAC_CAL_STORAGE_KEY, JSON.stringify(getSelectedMacCalendarIds()));
+      writeStored(MAC_CAL_STORAGE_KEY, JSON.stringify(getSelectedMacCalendarIds()));
     } catch (e) {}
   }
 
@@ -3384,7 +3600,7 @@
           sList.forEach(function(newSess) {
             var locParsed = parseLocationToPreset(newSess.location, existing.locationType || commonLT.locationType, existing.locationCustom || commonLT.locationCustom);
             var stTime = newSess.startTime || existing.startTime || commonLT.startTime;
-            var durH = (parseInt(newSess.durationHours, 10) === 2) ? 2 : (existing.durationHours || commonLT.durationHours || 3);
+            var durH = clampDuration(newSess.durationHours, existing.durationHours || commonLT.durationHours || 3);
 
             if (!existingByDate[newSess.teachDate]) {
               existing.sessions.push({
@@ -3439,7 +3655,7 @@
     var firstRaw = rawSessions[0] || {};
     var courseLoc = parseLocationToPreset(firstRaw.location, commonLT.locationType, commonLT.locationCustom);
     var courseStartTime = firstRaw.startTime || commonLT.startTime || "18:00";
-    var courseDuration = (parseInt(firstRaw.durationHours, 10) === 2) ? 2 : (commonLT.durationHours || 3);
+    var courseDuration = clampDuration(firstRaw.durationHours, commonLT.durationHours || 3);
 
     var evaluation = (hasEval !== false) ? {
       start: addDays(lastDate, 1),
@@ -3452,7 +3668,7 @@
     var sessions = rawSessions.map(function(s, idx) {
       var sLoc = parseLocationToPreset(s.location, courseLoc.locationType, courseLoc.locationCustom);
       var sTime = s.startTime || courseStartTime;
-      var sDur = (parseInt(s.durationHours, 10) === 2) ? 2 : courseDuration;
+      var sDur = clampDuration(s.durationHours, courseDuration);
       return {
         num: idx + 1,
         teachDate: s.teachDate,
@@ -3747,7 +3963,12 @@
         var subInfo = '';
         if (isRes) {
           var nextInfo = getNextUpcomingSubmission(c, todayStr);
-          if (isCompleted) {
+          var rvRowInfo = getReviewStatusInfo(c);
+          if (rvRowInfo) {
+            subInfo = '<strong style="color:' + rvRowInfo.color + ';">' + rvRowInfo.text + '</strong>' +
+              (rvRowInfo.lastDate ? ' • Submit gần nhất ' + formatVNDate(rvRowInfo.lastDate) : '') +
+              (c.journalName ? ' • ' + escapeHtml(c.journalName) : '');
+          } else if (isCompleted) {
             subInfo = '<strong style="color:#b91c1c;">🎉 Đã hoàn thành tất cả các lần Submit!</strong>';
           } else if (nextInfo && nextInfo.sub) {
             var sTitle = nextInfo.sub.title || ('Submit lần ' + nextInfo.sub.num);
@@ -3841,7 +4062,7 @@
               var mLane = (milestonePlan && milestonePlan.itemLanes[subIdx]) ? milestonePlan.itemLanes[subIdx] : 0;
               drawDayBar(canvas, sub.date, sub.date, startDate, 'bar-nc-submit', barLbl, c.name, !!sub.done, mLane, sub.note || '', null, function() {
                 toggleBarComplete(c.id, 'research_submit', subIdx);
-              });
+              }, { noOverdue: !!c.reviewStatus });
             });
           }
         } else if (isCons) {
@@ -3911,7 +4132,7 @@
               var sCanvas = createDayTimelineCanvas(totalTimelineWidth, startDate, totalDays);
               drawDayBar(sCanvas, sub.date, sub.date, startDate, 'bar-nc-submit', stLabel, c.name, !!sub.done, 0, sub.note || '', null, function() {
                 toggleBarComplete(c.id, 'research_submit', subIdx);
-              });
+              }, { noOverdue: !!c.reviewStatus });
               childTime.appendChild(sCanvas);
               timelineList.appendChild(childTime);
             });
@@ -4020,7 +4241,7 @@
     return canvas;
   }
 
-  function drawDayBar(canvas, startStr, endStr, originDate, cssClass, labelText, courseTitle, isDone, laneIndex, noteText, sessionMeta, onClickHandler) {
+  function drawDayBar(canvas, startStr, endStr, originDate, cssClass, labelText, courseTitle, isDone, laneIndex, noteText, sessionMeta, onClickHandler, opts) {
     if (!startStr || !endStr) return;
     var p1 = String(startStr).split('-');
     var p2 = String(endStr).split('-');
@@ -4042,8 +4263,12 @@
     var topPx = 7 + (lane * 34);
     var cleanNote = String(noteText || '').trim();
 
+    var todayForBar = getTodayStr();
+    var isOverdue = !isDone && !(opts && opts.noOverdue) && String(endStr) < todayForBar;
+    var lateDays = isOverdue ? diffDaysRaw(endStr, todayForBar) : 0;
+
     var bar = document.createElement('div');
-    bar.className = 'bar ' + cssClass + (isDone ? ' is-done' : '');
+    bar.className = 'bar ' + cssClass + (isDone ? ' is-done' : '') + (isOverdue ? ' is-overdue' : '');
     bar.style.left = (visibleStart * dayWidth) + 'px';
     bar.style.width = Math.max(22, visibleDays * dayWidth - 2) + 'px';
     bar.style.top = topPx + 'px';
@@ -4051,6 +4276,8 @@
     var innerHtml = '';
     if (isDone) {
       innerHtml += '<span class="done-badge">✓</span>';
+    } else if (isOverdue) {
+      innerHtml += '<span class="overdue-badge" title="Quá hạn ' + lateDays + ' ngày, chưa hoàn thành">!</span>';
     }
     if (cleanNote) {
       innerHtml += '<span class="note-dot">📝</span>';
@@ -4069,7 +4296,9 @@
       var tooltip = document.getElementById('tooltip');
       var statusText = isDone
         ? '<span style="color:#34d399; font-weight:700;">✅ ĐÃ HOÀN THÀNH (Nhấp để hoàn tác)</span>'
-        : '<span style="color:#fde047; font-weight:600;">⏳ Đang thực hiện (Nhấp vào thanh để đánh dấu Hoàn thành)</span>';
+        : (isOverdue
+          ? '<span style="color:#fbbf24; font-weight:700;">⚠️ QUÁ HẠN ' + lateDays + ' ngày mà chưa hoàn thành (Nhấp vào thanh để đánh dấu Hoàn thành)</span>'
+          : '<span style="color:#fde047; font-weight:600;">⏳ Đang thực hiện (Nhấp vào thanh để đánh dấu Hoàn thành)</span>');
 
       var metaPopupHtml = '';
       if (sessionMeta && (sessionMeta.location || sessionMeta.timeRange)) {
@@ -4136,6 +4365,7 @@
         c.submissions = [{ num: 1, title: "Submit lần 1", date: getTodayStr(), journal: c.journalName || "", note: "", done: false }];
       }
       document.getElementById('editJournalName').value = c.journalName || '';
+      document.getElementById('editReviewStatus').value = c.reviewStatus || '';
       renderModalSubmissionsList(c);
     } else if (isCons) {
       if (!Array.isArray(c.deliverables) || c.deliverables.length === 0) {
@@ -4151,7 +4381,7 @@
       locCusEl.style.display = (locType === "Khác") ? 'block' : 'none';
 
       document.getElementById('editStartTime').value = c.startTime || "18:00";
-      document.getElementById('editDurationHours').value = String((parseInt(c.durationHours, 10) === 2) ? 2 : 3);
+      document.getElementById('editDurationHours').value = String(clampDuration(c.durationHours, 3));
 
       var mDays = c.macroDays !== undefined ? c.macroDays : 7;
       document.getElementById('editMacroDaysRange').value = Math.min(30, mDays);
@@ -4185,7 +4415,7 @@
     locCus.style.display = (c.locationType === "Khác") ? 'block' : 'none';
     c.locationCustom = (c.locationType === "Khác") ? locCus.value : "";
     c.startTime = stTime.value || "18:00";
-    c.durationHours = (parseInt(durSel.value, 10) === 2) ? 2 : 3;
+    c.durationHours = clampDuration(durSel.value, 3);
 
     saveData();
     renderGantt();
@@ -4282,6 +4512,10 @@
       note: "",
       done: false
     });
+    // Đã có hạn Submit mới -> hết trạng thái chờ review / rejected
+    c.reviewStatus = '';
+    var rvSel = document.getElementById('editReviewStatus');
+    if (rvSel) rvSel.value = '';
     renderModalSubmissionsList(c);
     saveData();
     renderGantt();
@@ -4302,6 +4536,15 @@
       }
     });
     renderModalSubmissionsList(c);
+    saveData();
+    renderGantt();
+  }
+
+  function handleReviewStatusChange() {
+    var c = courses.find(function(item) { return item.id === activeCourseId; });
+    if (!c) return;
+    var v = document.getElementById('editReviewStatus').value;
+    c.reviewStatus = (v === 'under_review' || v === 'rejected') ? v : '';
     saveData();
     renderGantt();
   }
@@ -4391,7 +4634,7 @@
       var prepDays = diffDaysRaw(s.prepStart, s.teachDate);
       var isBothDone = (prepDays > 0 ? (s.prepDone && s.teachDone) : s.teachDone);
       var sLocType = s.locationType || "Mỹ Đình";
-      var sDur = (parseInt(s.durationHours, 10) === 2) ? 2 : 3;
+      var sDur = clampDuration(s.durationHours, 3);
 
       var row = document.createElement('div');
       row.className = 'stage-edit-row';
@@ -4404,6 +4647,7 @@
             '<option value="LTK"' + (sLocType === 'LTK' ? ' selected' : '') + '>LTK</option>' +
             '<option value="FPT Tower"' + (sLocType === 'FPT Tower' ? ' selected' : '') + '>FPT Tower</option>' +
             '<option value="Keangnam"' + (sLocType === 'Keangnam' ? ' selected' : '') + '>Keangnam</option>' +
+            '<option value="Online"' + (sLocType === 'Online' ? ' selected' : '') + '>Online</option>' +
             '<option value="Khác"' + (sLocType === 'Khác' ? ' selected' : '') + '>Khác...</option>' +
           '</select>' +
           '<input type="text" class="form-control" id="s_loc_custom_' + idx + '" placeholder="Điền địa điểm..." value="' + escapeHtml(s.locationCustom || '') + '" style="display:' + (sLocType === 'Khác' ? 'block' : 'none') + '; padding:3px 5px; font-size:10px;" oninput="handleSessionRowChange(' + idx + ', \'locCustom\')">' +
@@ -4412,6 +4656,7 @@
         '<select class="form-control" id="s_dur_' + idx + '" style="padding:4px 3px; font-size:11px;" onchange="handleSessionRowChange(' + idx + ', \'duration\')">' +
           '<option value="3"' + (sDur === 3 ? ' selected' : '') + '>3h</option>' +
           '<option value="2"' + (sDur === 2 ? ' selected' : '') + '>2h</option>' +
+          '<option value="1"' + (sDur === 1 ? ' selected' : '') + '>1h</option>' +
         '</select>' +
         '<input type="text" class="form-control" placeholder="📝 Ghi chú..." value="' + escapeHtml(s.note || '') + '" id="s_note_' + idx + '" oninput="handleSessionRowChange(' + idx + ', \'note\')">' +
         '<input type="number" class="form-control" min="0" max="60" value="' + prepDays + '" id="s_prep_days_' + idx + '" style="padding:4px;" oninput="handleSessionRowChange(' + idx + ', \'prepDays\')">' +
@@ -4451,7 +4696,7 @@
     } else if (changeType === 'startTime' && timeEl) {
       s.startTime = timeEl.value || "18:00";
     } else if (changeType === 'duration' && durEl) {
-      s.durationHours = (parseInt(durEl.value, 10) === 2) ? 2 : 3;
+      s.durationHours = clampDuration(durEl.value, 3);
     } else if (changeType === 'note' && noteEl) {
       s.note = noteEl.value;
     } else if (changeType === 'prepDays' && daysEl && teachEl) {
@@ -4572,9 +4817,7 @@
   }
 
   function saveData() {
-    try {
-      localStorage.setItem('academic_smart_gantt', JSON.stringify(courses));
-    } catch (e) {}
+    writeStored('academic_smart_gantt', JSON.stringify(courses));
   }
 
   function resetSample() {
@@ -4605,32 +4848,78 @@
     dl.click();
   }
 
+  function hasNativeFilePicker() {
+    return !!(window.GanttNative && typeof window.GanttNative.openTextFile === 'function');
+  }
+
+  function pickImportJson() {
+    if (hasNativeFilePicker()) {
+      window.GanttNative.openTextFile(['json']).then(function(file) {
+        if (file && typeof file.content === 'string') importJsonText(file.content);
+      }).catch(function(e) {
+        alert('Không mở được tệp: ' + (e && e.message ? e.message : e));
+      });
+      return;
+    }
+    document.getElementById('importJsonFile').click();
+  }
+
   function importJsonData(e) {
-    var file = e.target.files[0];
+    var input = e.target;
+    var file = input.files[0];
     if (!file) return;
     var r = new FileReader();
     r.onload = function(evt) {
-      try {
-        var parsed = JSON.parse(evt.target.result);
-        if (Array.isArray(parsed)) {
-          courses = normalizeCourses(parsed);
-        } else if (parsed && Array.isArray(parsed.courses)) {
-          courses = normalizeCourses(parsed.courses);
-          if (Array.isArray(parsed.deletedRegistry)) {
-            deletedRegistry = parsed.deletedRegistry;
-            saveDeletedRegistry();
-          }
-        }
-        saveData();
-        renderGantt();
-      } catch (err) {
-        alert('Tệp không đúng định dạng JSON.');
-      }
+      input.value = '';
+      importJsonText(evt.target.result);
+    };
+    r.onerror = function() {
+      input.value = '';
+      alert('Không đọc được tệp đã chọn.');
     };
     r.readAsText(file);
   }
 
+  function importJsonText(text) {
+    var parsed;
+    try {
+      parsed = JSON.parse(text);
+    } catch (err) {
+      alert('Tệp không đúng định dạng JSON.');
+      return;
+    }
+    var list = Array.isArray(parsed) ? parsed : ((parsed && Array.isArray(parsed.courses)) ? parsed.courses : null);
+    if (!list) {
+      alert('Tệp JSON không chứa danh sách dự án (thiếu mục "courses").');
+      return;
+    }
+    try {
+      courses = normalizeCourses(list);
+    } catch (err) {
+      alert('Không đọc được dữ liệu dự án trong tệp: ' + (err && err.message ? err.message : err));
+      return;
+    }
+    if (!Array.isArray(parsed) && Array.isArray(parsed.deletedRegistry)) {
+      deletedRegistry = parsed.deletedRegistry;
+      saveDeletedRegistry();
+    }
+    saveData();
+    renderGantt();
+    alert('Đã nạp ' + courses.length + ' dự án từ tệp JSON.');
+  }
+
+  // Nhấn Esc để đóng cửa sổ chỉnh sửa dự án
+  document.addEventListener('keydown', function(e) {
+    if (e.key !== 'Escape' || e.isComposing) return;
+    var modal = document.getElementById('editModal');
+    if (modal && modal.classList.contains('active')) {
+      e.preventDefault();
+      closeModal();
+    }
+  });
+
   // Khởi chạy an toàn
+  initNativeFilePickers();
   initMacSyncPanel();
   renderCreationSubmissionsList();
   renderCreationDeliverablesList();

@@ -24,9 +24,20 @@ Dữ liệu cũ nằm trong trình duyệt, ứng dụng không tự đọc đư
 
 ## 3. Dữ liệu được lưu ở đâu
 
-- `~/Library/Application Support/AcademicGantt/storage.json` — ghi lại sau mỗi thay đổi.
+- `~/Library/Application Support/AcademicGantt/storage.json` — ghi lại sau mỗi thay đổi (gộp trong 0,2 giây).
+- Cứ 5 giây, khi app mất focus và khi thoát, app chụp lại toàn bộ dữ liệu của trang ra tệp này.
 - `storage.backup.json` — bản của lần mở trước.
 - Mở nhanh: menu **Tệp → Mở thư mục dữ liệu**.
+
+## 3b. Có gì mới ở bản 3.1.0
+
+- **Tải công việc:** mỗi công việc một dòng đánh số, màu chữ theo công đoạn (đề cương / soạn bài / giảng dạy / chấm thi).
+- **Cảnh báo quá hạn:** khối công việc đã qua ngày kết thúc mà chưa đánh dấu hoàn thành sẽ có viền cam nhấp nháy + dấu `!` trên thanh Gantt, và được liệt kê trong ô Tải công việc (bấm vào để mở dự án).
+- **Dự án nghiên cứu:** thêm trạng thái **⏳ Chờ review** và **❌ Rejected** (chọn trong cửa sổ chỉnh sửa). Thêm lần Submit mới sẽ tự bỏ trạng thái này.
+- **Địa điểm:** thêm **Online** (tự nhận diện Zoom / Teams / Meet khi kéo từ Calendar).
+- **Thời lượng:** 3 mức 3 / 2 / 1 tiếng.
+- **Phím Esc** đóng cửa sổ chỉnh sửa dự án.
+- **Sửa lỗi:** mất dữ liệu sau khi tắt/mở lại app; nút **Nạp JSON** và chọn tệp **.ics** không phản ứng (nay dùng hộp thoại chọn tệp của macOS, báo lỗi rõ ràng khi tệp sai).
 
 ## 4. Những gì thay đổi so với `sync_server.py`
 
