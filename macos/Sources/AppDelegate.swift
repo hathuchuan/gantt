@@ -506,6 +506,11 @@ extension AppDelegate: WKNavigationDelegate {
             return
         }
         if url.isFileURL || scheme == "about" {
+            // Mọi lần nạp khung chính (mở app, Tải lại, khôi phục tiến trình web, điều hướng) đều phải nhận script
+            // cầu nối dựng từ bản dữ liệu mới nhất trên đĩa; nếu không trang sẽ khởi động bằng dữ liệu cũ.
+            if navigationAction.targetFrame?.isMainFrame ?? true {
+                installBridgeScript()
+            }
             decisionHandler(.allow)
             return
         }

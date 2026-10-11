@@ -10,7 +10,9 @@
 #   open    chạy qua LaunchServices (`open -n -W`), giống hệt khi người dùng bấm đúp trong Finder
 set -u
 
-APP="${1:?Cần đường dẫn tới Academic Gantt.app}"
+APP_ARG="${1:?Cần đường dẫn tới Academic Gantt.app}"
+# `open -a` chỉ nhận tên ứng dụng hoặc đường dẫn tuyệt đối.
+APP="$(cd "$(dirname "$APP_ARG")" && pwd)/$(basename "$APP_ARG")"
 LAUNCHER="${2:-direct}"
 BIN="$APP/Contents/MacOS/AcademicGantt"
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/gantt-persist.XXXXXX")"
@@ -98,7 +100,7 @@ scenario() {
         "$BIN" --selftest-phase "$phase" --selftest-exit hold --selftest-marker "$tag" --data-dir "$data" > "$out_w" 2>&1 &
       fi
       local i
-      for i in $(seq 1 60); do
+      for i in $(seq 1 30); do
         grep -q "PERSIST-WRITTEN" "$out_w" 2>/dev/null && break
         grep -q "^PERSIST FAIL" "$out_w" 2>/dev/null && break
         sleep 1
@@ -156,6 +158,25 @@ scenario_recovery() {
   fi
 }
 
+# Đối chứng âm tính: xóa cả storage.json lẫn backups/ thì bước mở lại PHẢI báo thất bại.
+# Chứng minh bài kiểm tra có khả năng phát hiện mất dữ liệu (không "luôn qua").
+scenario_negative_control() {
+  local tag="negative-$LAUNCHER"
+  local data="$WORK/$tag dữ liệu"
+  mkdir -p "$data"
+  say ""
+  say "=== [$tag] đối chứng: xóa dữ liệu rồi mở lại phải bị phát hiện"
+  launch "$WORK/$tag.w.log" --selftest-phase write --selftest-exit terminate --selftest-marker "$tag" --data-dir "$data"
+  grep -q "PERSIST-WRITTEN" "$WORK/$tag.w.log" || { fail "[$tag] không ghi được dữ liệu thử"; show_dir "$data"; return; }
+  rm -rf "$data/storage.json" "$data/backups"
+  launch "$WORK/$tag.v.log" --selftest-phase verify --selftest-marker "$tag" --data-dir "$data"
+  if grep -q "^PERSIST FAIL" "$WORK/$tag.v.log"; then
+    pass "[$tag] mất dữ liệu được phát hiện đúng (bài kiểm tra không phải 'luôn qua')"
+  else
+    fail "[$tag] bài kiểm tra KHÔNG phát hiện được việc mất dữ liệu"; cat "$WORK/$tag.v.log"
+  fi
+}
+
 # Tải lại trang (Cmd+R) và khôi phục tiến trình web không được làm dữ liệu quay về bản lúc mở app.
 scenario_reload() {
   local tag="reload-$LAUNCHER"
@@ -180,6 +201,7 @@ scenario close close
 scenario kill9 kill9
 scenario kill9-silent kill9-silent
 scenario_recovery
+scenario_negative_control
 scenario_reload
 
 # In nhật ký của một kịch bản để dễ đọc trong log CI

@@ -92,12 +92,37 @@ extension AppDelegate {
                 let logText = (try? String(contentsOf: self.storage.directory.appendingPathComponent("app.log"), encoding: .utf8)) ?? ""
                 checks["logWritten"] = logText.contains("khởi động")
                 checks["calendarAuthStatus"] = CalendarBridge.authorizationStatusDescription
+                for (name, ok) in self.checkReadTextFile() { checks[name] = ok }
                 let required = ["bridge", "nativePicker", "bootState", "nativePanel", "ping", "acked", "saveStatusOk",
-                                "backup", "storageFileWritten", "backupFile", "logWritten"]
+                                "backup", "storageFileWritten", "backupFile", "logWritten",
+                                "readUTF8", "readUTF8BOM", "readUTF16", "readMissingFails"]
                 let passed = required.allSatisfy { (checks[$0] as? Bool) == true } && ((checks["courses"] as? Int) ?? 0) > 0
                 self.finishPhase(passed: passed, "\(checks)")
             }
         }
+    }
+
+    /// Đường đọc tệp của "Nạp JSON" và ".ics" (phần sau hộp thoại chọn tệp): UTF-8, UTF-8 có BOM, UTF-16, tệp không tồn tại.
+    func checkReadTextFile() -> [String: Bool] {
+        let dir = storage.directory.appendingPathComponent("readtest", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        func content(_ name: String, _ data: Data) -> String? {
+            let url = dir.appendingPathComponent(name)
+            try? data.write(to: url)
+            if case .success(let value) = AppDelegate.readTextFile(at: url), let dict = value as? [String: String] {
+                return dict["content"]
+            }
+            return nil
+        }
+        let json = "{\"courses\": [{\"name\": \"Môn Việt Nam\"}]}"
+        var out: [String: Bool] = [:]
+        out["readUTF8"] = content("a.json", Data(json.utf8)) == json
+        out["readUTF8BOM"] = content("b.json", Data([0xEF, 0xBB, 0xBF] + Array(json.utf8))) == json
+        out["readUTF16"] = content("c.json", json.data(using: .utf16) ?? Data()) == json
+        var missingFails = false
+        if case .failure = AppDelegate.readTextFile(at: dir.appendingPathComponent("khong-ton-tai.json")) { missingFails = true }
+        out["readMissingFails"] = missingFails
+        return out
     }
 
     // MARK: - Kịch bản "tắt rồi mở lại" (--selftest-phase)
@@ -266,9 +291,30 @@ extension AppDelegate {
                 self.reloadStep = 3
                 self.webViewWebContentProcessDidTerminate(self.webView)
             }
-        default:
+        case 3:
             verifyMarker("B", label: "reload/3") { [weak self] in
-                self?.finishPhase(passed: true, "reload: dữ liệu mới nhất còn nguyên sau 2 lần tải lại và 1 lần khôi phục tiến trình web")
+                guard let self = self else { return }
+                // Đối chứng: ghi C rồi tải lại THẲNG bằng webView.reload() (không qua reloadPage). Nhờ dựng lại script
+                // ngay tại decidePolicyFor, trang vẫn phải thấy C; ghi lại kết quả để biết cơ chế có hoạt động thật không.
+                self.runJS(AppDelegate.jsModify, arguments: ["marker": "C"]) { result in
+                    guard case .success(let text) = result, text.contains("\"ok\":true") else {
+                        self.failSelfTest("reload/3 modify: \(result)")
+                        return
+                    }
+                    self.reloadStep = 4
+                    self.webView.reload()
+                }
+            }
+        default:
+            runJS(AppDelegate.jsVerify, arguments: ["marker": "C"]) { [weak self] result in
+                guard let self = self else { return }
+                var pageSeesLatest = false
+                if case .success(let text) = result { pageSeesLatest = text.contains("\"ok\":true") }
+                self.storage.waitUntilFlushed()
+                let fileText = (try? String(contentsOf: self.storage.file, encoding: .utf8)) ?? ""
+                let fileHasLatest = fileText.contains("ghi-chu-C")
+                self.finishPhase(passed: pageSeesLatest && fileHasLatest,
+                                 "reload: bản mới nhất còn nguyên sau 2 lần Tải lại, 1 lần khôi phục tiến trình web và 1 lần tải lại thẳng (pageSeesLatest=\(pageSeesLatest) fileHasLatest=\(fileHasLatest))")
             }
         }
     }

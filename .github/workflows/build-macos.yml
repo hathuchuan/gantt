@@ -38,6 +38,17 @@ jobs:
         continue-on-error: true
         run: bash macos/tests/persist.sh "macos/build/Academic Gantt.app" open
 
+      - name: Kiểm thử chạy thẳng từ DMG (ổ đĩa chỉ đọc, như khi chưa kéo app vào Applications)
+        timeout-minutes: 10
+        continue-on-error: true
+        run: |
+          MNT="$(mktemp -d)"
+          hdiutil attach macos/build/AcademicGantt-*.dmg -nobrowse -readonly -mountpoint "$MNT"
+          ls -la "$MNT"
+          "$MNT/Academic Gantt.app/Contents/MacOS/AcademicGantt" --self-test
+          bash macos/tests/persist.sh "$MNT/Academic Gantt.app" direct
+          hdiutil detach "$MNT" -force
+
       - uses: actions/upload-artifact@v4
         with:
           name: AcademicGantt-macOS
