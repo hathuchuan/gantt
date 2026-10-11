@@ -79,7 +79,11 @@
       gap: 12px;
     }
     .header-title h1 { font-size: 21px; font-weight: 700; color: #0f172a; display: flex; align-items: center; gap: 8px; }
-    .header-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .header-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    /* Chỉ báo lưu dữ liệu (chỉ hiện trong ứng dụng macOS) */
+    .save-status { font-size: 12px; color: var(--text-muted); white-space: nowrap; padding: 0 4px; cursor: default; }
+    .save-status.ok { color: #047857; }
+    .save-status.bad { color: #b91c1c; font-weight: 700; }
 
     .btn {
       padding: 7px 12px;
@@ -1050,6 +1054,7 @@
       <h1>📊 Kế Hoạch Đào Tạo, Nghiên Cứu & Tư Vấn (Modular Gantt)</h1>
     </div>
     <div class="header-actions">
+      <span id="saveStatus" class="save-status" style="display:none;"></span>
       <button type="button" class="btn btn-secondary" id="btnBlockedRegistry" onclick="clearDeletedBlocklist()" title="Bấm để xem hoặc gỡ danh sách chặn các dự án đã xóa khỏi sync-server">
         🚫 Đã chặn xóa (0)
       </button>
@@ -1830,9 +1835,51 @@
     try { return localStorage.getItem(key); } catch (e) { return null; }
   }
 
+  // Ghi dữ liệu. Trong ứng dụng: gửi sang native (ghi xuống đĩa, có xác nhận) + giữ thêm một bản trong
+  // localStorage làm dự phòng. Trình duyệt: chỉ localStorage.
   function writeStored(key, json) {
     try { localStorage.setItem(key, json); } catch (e) {}
-    if (window.GanttNative && typeof window.GanttNative.saveState === 'function') window.GanttNative.saveState(key, json);
+    var native = window.GanttNative;
+    if (native && typeof native.saveState === 'function') {
+      try {
+        native.saveState(key, json).catch(function() { /* trạng thái lỗi đã được hiển thị ở chỉ báo lưu */ });
+      } catch (e) {}
+    }
+  }
+
+  // Chỉ báo "Đã lưu hh:mm:ss" ở đầu trang; chuyển đỏ nếu native không ghi được dữ liệu ra đĩa.
+  function initSaveStatus() {
+    var native = window.GanttNative;
+    var el = document.getElementById('saveStatus');
+    if (!native || !el) return;
+    el.style.display = '';
+    function two(n) { return (n < 10 ? '0' : '') + n; }
+    function render(st) {
+      if (!st || st.at === null || st.at === undefined) {
+        el.className = 'save-status';
+        el.textContent = '💾 Dữ liệu lưu trên máy';
+        el.title = 'Dữ liệu được lưu tự động vào thư mục Application Support/AcademicGantt (menu Tệp → Mở thư mục dữ liệu).';
+      } else if (st.ok) {
+        var d = new Date(st.at);
+        el.className = 'save-status ok';
+        el.textContent = '💾 Đã lưu ' + two(d.getHours()) + ':' + two(d.getMinutes()) + ':' + two(d.getSeconds());
+        el.title = 'Dữ liệu đã được ghi xuống đĩa.';
+      } else {
+        el.className = 'save-status bad';
+        el.textContent = '⚠️ Chưa lưu được dữ liệu';
+        el.title = (st.error || 'Không ghi được dữ liệu ra đĩa.') + '\nHãy bấm "Xuất JSON" để sao lưu thủ công.';
+      }
+    }
+    native.onSaveStatus = render;
+    render(native.saveStatus);
+  }
+
+  // Sao lưu trạng thái trên đĩa trước một thao tác sẽ thay thế toàn bộ dữ liệu (nạp JSON, khôi phục mẫu).
+  function backupBeforeReplace(label) {
+    try {
+      var native = window.GanttNative;
+      if (native && typeof native.backupNow === 'function') native.backupNow(label).catch(function() {});
+    } catch (e) {}
   }
 
   var deletedRegistry = [];
@@ -2165,11 +2212,21 @@
   }
 
   var courses = [];
+  // Có dữ liệu đã lưu nhưng không đọc được: không được lặng lẽ thay bằng dữ liệu mẫu rồi để lần lưu sau
+  // ghi đè mất dữ liệu thật. Giữ bản gốc ở một khóa riêng và báo cho người dùng (xem handleBootFailure).
+  var bootFailure = null;
   try {
     var saved = readStored('academic_smart_gantt');
-    courses = saved ? normalizeCourses(JSON.parse(saved)) : normalizeCourses(SAMPLE_DATA);
+    if (saved) {
+      var parsedSaved = JSON.parse(saved);
+      if (!Array.isArray(parsedSaved)) throw new Error('dữ liệu đã lưu không phải là danh sách dự án');
+      courses = normalizeCourses(parsedSaved);
+    } else {
+      courses = normalizeCourses(SAMPLE_DATA);
+    }
   } catch (err) {
     courses = normalizeCourses(SAMPLE_DATA);
+    bootFailure = { message: (err && err.message) ? err.message : String(err), raw: (typeof saved === 'string') ? saved : '' };
   }
 
   var viewMode = 'grouped';
@@ -4822,6 +4879,7 @@
 
   function resetSample() {
     if (confirm('Khôi phục lại dữ liệu mẫu ban đầu?')) {
+      backupBeforeReplace('reset');
       courses = normalizeCourses(SAMPLE_DATA);
       saveData();
       renderGantt();
@@ -4854,7 +4912,7 @@
 
   function pickImportJson() {
     if (hasNativeFilePicker()) {
-      window.GanttNative.openTextFile(['json']).then(function(file) {
+      window.GanttNative.openTextFile(['json', 'txt']).then(function(file) {
         if (file && typeof file.content === 'string') importJsonText(file.content);
       }).catch(function(e) {
         alert('Không mở được tệp: ' + (e && e.message ? e.message : e));
@@ -4880,32 +4938,88 @@
     r.readAsText(file);
   }
 
+  // Nhận dạng các định dạng tệp có thể nạp:
+  //  1) [ ...dự án ]                       2) { courses: [...], deletedRegistry: [...] } (tệp "Xuất JSON")
+  //  3) storage.json / bản sao lưu của ứng dụng: { academic_smart_gantt: "<chuỗi JSON>", ... }
+  function extractImportedProjects(parsed) {
+    if (Array.isArray(parsed)) return { list: parsed, deleted: null };
+    if (parsed && Array.isArray(parsed.courses)) {
+      return { list: parsed.courses, deleted: Array.isArray(parsed.deletedRegistry) ? parsed.deletedRegistry : null };
+    }
+    if (parsed && typeof parsed.academic_smart_gantt === 'string') {
+      var inner = JSON.parse(parsed.academic_smart_gantt);
+      var innerList = Array.isArray(inner) ? inner : ((inner && Array.isArray(inner.courses)) ? inner.courses : null);
+      if (innerList) {
+        var del = null;
+        if (typeof parsed.academic_smart_gantt_deleted === 'string') {
+          try {
+            var d = JSON.parse(parsed.academic_smart_gantt_deleted);
+            if (Array.isArray(d)) del = d;
+          } catch (e) {}
+        }
+        return { list: innerList, deleted: del };
+      }
+    }
+    return null;
+  }
+
   function importJsonText(text) {
     var parsed;
     try {
-      parsed = JSON.parse(text);
+      parsed = JSON.parse(String(text || '').replace(/^\uFEFF/, ''));
     } catch (err) {
       alert('Tệp không đúng định dạng JSON.');
       return;
     }
-    var list = Array.isArray(parsed) ? parsed : ((parsed && Array.isArray(parsed.courses)) ? parsed.courses : null);
-    if (!list) {
-      alert('Tệp JSON không chứa danh sách dự án (thiếu mục "courses").');
-      return;
-    }
+    var found = null;
     try {
-      courses = normalizeCourses(list);
+      found = extractImportedProjects(parsed);
     } catch (err) {
       alert('Không đọc được dữ liệu dự án trong tệp: ' + (err && err.message ? err.message : err));
       return;
     }
-    if (!Array.isArray(parsed) && Array.isArray(parsed.deletedRegistry)) {
-      deletedRegistry = parsed.deletedRegistry;
+    if (!found) {
+      alert('Tệp JSON này không phải dữ liệu của Academic Gantt (không có danh sách "courses").');
+      return;
+    }
+    var imported;
+    try {
+      imported = normalizeCourses(found.list);
+    } catch (err) {
+      alert('Không đọc được dữ liệu dự án trong tệp: ' + (err && err.message ? err.message : err));
+      return;
+    }
+    if (found.list.length === 0) {
+      alert('Tệp này không chứa dự án nào nên không có gì để nạp.\nDữ liệu hiện tại được giữ nguyên.');
+      return;
+    }
+    backupBeforeReplace('import');
+    courses = imported;
+    if (found.deleted) {
+      deletedRegistry = found.deleted;
       saveDeletedRegistry();
     }
     saveData();
     renderGantt();
     alert('Đã nạp ' + courses.length + ' dự án từ tệp JSON.');
+  }
+
+  // Dữ liệu đã lưu không đọc được: cất bản gốc sang khóa riêng (không bị lần lưu sau ghi đè) rồi báo người dùng.
+  function handleBootFailure() {
+    if (!bootFailure) return;
+    var failure = bootFailure;
+    bootFailure = null;
+    var rescueKey = '';
+    if (failure.raw) {
+      rescueKey = 'academic_smart_gantt_unreadable_' + new Date().toISOString().replace(/[^0-9]/g, '').slice(0, 14);
+      writeStored(rescueKey, failure.raw);
+    }
+    setTimeout(function() {
+      alert('Không đọc được dữ liệu đã lưu của bạn (' + failure.message + ').\n' +
+        (rescueKey ? 'Bản gốc đã được giữ lại nguyên vẹn trong tệp dữ liệu (khóa ' + rescueKey + ').\n' : '') +
+        'Ứng dụng đang hiển thị dữ liệu mẫu. Bạn có thể nạp lại bản sao lưu bằng nút "Nạp JSON" ' +
+        '(menu Tệp → Mở thư mục dữ liệu → thư mục backups).');
+    }, 300);
   }
 
   // Nhấn Esc để đóng cửa sổ chỉnh sửa dự án
@@ -4919,12 +5033,14 @@
   });
 
   // Khởi chạy an toàn
+  initSaveStatus();
   initNativeFilePickers();
   initMacSyncPanel();
   renderCreationSubmissionsList();
   renderCreationDeliverablesList();
   renderGantt();
   setTimeout(scrollToToday, 120);
+  handleBootFailure();
 </script>
 </body>
 </html>

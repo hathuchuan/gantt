@@ -1,7 +1,11 @@
 // Cầu nối giữa trang HTML và ứng dụng macOS (được nạp trước mọi script của trang).
-// - window.GanttNative: đọc Apple Calendar qua EventKit, lưu tệp xuất JSON.
-// - Sao chép localStorage ra tệp trong ~/Library/Application Support/AcademicGantt
-//   để dữ liệu bền vững và dễ sao lưu.
+//
+// Lưu dữ liệu:
+//   - Tệp storage.json trong ~/Library/Application Support/AcademicGantt là nguồn chuẩn.
+//   - Native tạo lại script này cho MỖI lần nạp / tải lại trang, nên GanttNative.bootState luôn là
+//     bản mới nhất trên đĩa. Trang đọc từ bootState và ghi bằng GanttNative.saveState(key, value).
+//   - saveState trả về Promise, chỉ thành công khi native đã ghi xuống đĩa; thất bại thì reject
+//     và cập nhật saveStatus để giao diện cảnh báo người dùng.
 (function () {
   var handlers = window.webkit && window.webkit.messageHandlers;
   var bridge = handlers && handlers.gantt;
@@ -18,22 +22,34 @@
     });
   }
 
-  function fireAndForget(cmd, payload) {
-    call(cmd, payload).catch(function () {});
-  }
+  var KEY_PREFIX = 'academic_smart_gantt';
+  var state = __GANTT_STORAGE__;
 
-  var saved = __GANTT_STORAGE__;
-
-  window.GanttNative = {
+  var native = {
     platform: 'macos-app',
     version: __GANTT_VERSION__,
-    // Dữ liệu đã lưu trên đĩa lúc mở app: nguồn chuẩn để trang nạp lại.
-    bootState: saved,
-    // Lưu thẳng ra tệp, không phụ thuộc localStorage của WebView.
+    // Dữ liệu trên đĩa lúc nạp trang; saveState cập nhật tại chỗ để luôn là bản mới nhất.
+    bootState: state,
+    // Tăng sau mỗi lần lưu. Native dùng để biết có gì mới cần kéo về hay không.
+    rev: 0,
+    // { ok, at (ms), error } của lần lưu gần nhất; onSaveStatus(status) được gọi mỗi khi đổi.
+    saveStatus: { ok: true, at: null, error: null },
+    onSaveStatus: null,
+
     saveState: function (key, value) {
-      saved[String(key)] = String(value);
-      fireAndForget('storageSet', { key: String(key), value: String(value) });
+      key = String(key);
+      value = String(value);
+      state[key] = value;
+      native.rev++;
+      return call('storageSet', { key: key, value: value }).then(function () {
+        setStatus(true, null);
+      }, function (err) {
+        setStatus(false, err && err.message ? err.message : String(err));
+        throw err;
+      });
     },
+    // Sao lưu nguyên trạng thái trên đĩa trước một thao tác phá hủy (nạp JSON, khôi phục mẫu).
+    backupNow: function (label) { return call('backupNow', { label: String(label || 'manual') }); },
     // Hộp thoại chọn tệp văn bản của macOS. Trả về { name, content } hoặc false nếu bấm Hủy.
     openTextFile: function (extensions) { return call('openTextFile', { extensions: extensions || [] }); },
     listCalendars: function () { return call('listCalendars'); },
@@ -44,48 +60,29 @@
     }
   };
 
-  var ls;
-  try { ls = window.localStorage; } catch (e) { return; }
-  if (!ls) return;
+  function setStatus(ok, error) {
+    native.saveStatus = { ok: ok, at: Date.now(), error: error };
+    if (typeof native.onSaveStatus === 'function') {
+      try { native.onSaveStatus(native.saveStatus); } catch (e) {}
+    }
+  }
 
-  var proto = Storage.prototype;
-  var origSet = proto.setItem;
-  var origRemove = proto.removeItem;
-  var origClear = proto.clear;
+  window.GanttNative = native;
 
+  // Dữ liệu cũ nằm trong localStorage của WebView (bản 3.0.x / 3.1.0, hoặc bản sao phụ do trang ghi):
+  // chỉ bổ sung những khóa mà tệp trên đĩa chưa có, tuyệt đối không ghi đè dữ liệu trong tệp.
   try {
-    // Tệp trên đĩa là nguồn chuẩn: nạp vào localStorage trước khi trang chạy.
-    Object.keys(saved).forEach(function (k) { origSet.call(ls, k, saved[k]); });
-    // Khóa chỉ có trong localStorage (VD: tệp bị xóa) thì ghi ngược ra tệp.
-    for (var i = 0; i < ls.length; i++) {
+    var ls = window.localStorage;
+    for (var i = 0; ls && i < ls.length; i++) {
       var key = ls.key(i);
-      if (!Object.prototype.hasOwnProperty.call(saved, key)) {
-        saved[key] = ls.getItem(key);
-        fireAndForget('storageSet', { key: key, value: saved[key] });
+      if (key && key.indexOf(KEY_PREFIX) === 0 && !Object.prototype.hasOwnProperty.call(state, key)) {
+        var value = ls.getItem(key);
+        if (typeof value === 'string' && value !== '') {
+          state[key] = value;
+          native.rev++;
+          call('storageSet', { key: key, value: value }).catch(function () {});
+        }
       }
     }
   } catch (e) {}
-
-  // bootState luôn phản ánh giá trị mới nhất để trang đọc lại không bị cũ.
-  proto.setItem = function (k, v) {
-    origSet.call(this, k, v);
-    if (this === ls) {
-      saved[String(k)] = String(v);
-      fireAndForget('storageSet', { key: String(k), value: String(v) });
-    }
-  };
-  proto.removeItem = function (k) {
-    origRemove.call(this, k);
-    if (this === ls) {
-      delete saved[String(k)];
-      fireAndForget('storageRemove', { key: String(k) });
-    }
-  };
-  proto.clear = function () {
-    origClear.call(this);
-    if (this === ls) {
-      Object.keys(saved).forEach(function (key) { delete saved[key]; });
-      fireAndForget('storageClear');
-    }
-  };
 })();

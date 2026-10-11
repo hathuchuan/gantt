@@ -25,9 +25,18 @@ jobs:
           if [ -n "$RELEASE_TAG" ]; then export VERSION="${RELEASE_TAG#v}"; fi
           ./macos/build.sh
 
-      - name: Self-test (mở app, kiểm tra cầu nối JS và lưu dữ liệu)
+      - name: Self-test (mở app, kiểm tra cầu nối JS, ghi dữ liệu, sao lưu, nhật ký)
         timeout-minutes: 3
         run: '"macos/build/Academic Gantt.app/Contents/MacOS/AcademicGantt" --self-test'
+
+      - name: Kiểm thử tắt / mở lại app (thoát êm, đóng cửa sổ, kill -9, tệp hỏng, tải lại trang)
+        timeout-minutes: 10
+        run: bash macos/tests/persist.sh "macos/build/Academic Gantt.app" direct
+
+      - name: Kiểm thử tắt / mở lại app qua LaunchServices (giống bấm đúp trong Finder)
+        timeout-minutes: 10
+        continue-on-error: true
+        run: bash macos/tests/persist.sh "macos/build/Academic Gantt.app" open
 
       - uses: actions/upload-artifact@v4
         with:

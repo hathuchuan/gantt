@@ -14,31 +14,55 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
     }
 
-    private var window: NSWindow!
-    private var webView: WKWebView!
-    private var storage: StorageMirror!
-    private let calendarBridge = CalendarBridge()
+    var window: NSWindow!
+    var webView: WKWebView!
+    var storage: StorageMirror!
+    let calendarBridge = CalendarBridge()
+    let userContent = WKUserContentController()
+    let options = LaunchOptions(CommandLine.arguments)
 
-    private var snapshotTimer: Timer?
+    var snapshotTimer: Timer?
+    var lastPulledRev = -1
+    var terminating = false
 
-    private let isSelfTest = CommandLine.arguments.contains("--self-test")
-    private var selfTestFinished = false
+    // Trạng thái của các bài tự kiểm tra (xem SelfTest.swift)
+    var selfTestFinished = false
+    var reloadStep = 0
 
-    private var appVersion: String {
+    var appVersion: String {
         (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String) ?? "dev"
     }
 
     // MARK: - Vòng đời ứng dụng
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        storage = StorageMirror(directory: isSelfTest ? AppDelegate.prepareSelfTestDirectory() : StorageMirror.defaultDirectory)
+        let dataDirectory: URL
+        if options.smoke {
+            dataDirectory = AppDelegate.prepareSelfTestDirectory()
+        } else if options.phase != nil {
+            guard let custom = options.dataDir else {
+                print("SELFTEST FAIL các bài kiểm tra --selftest-phase bắt buộc phải có --data-dir (để không đụng vào dữ liệu thật)")
+                fflush(stdout)
+                exit(2)
+            }
+            dataDirectory = custom
+        } else {
+            dataDirectory = StorageMirror.defaultDirectory
+        }
+
+        AppLog.shared.configure(directory: dataDirectory)
+        AppLog.shared.write("khởi động \(appVersion) · macOS \(ProcessInfo.processInfo.operatingSystemVersionString) · \(dataDirectory.path)")
+        storage = StorageMirror(directory: dataDirectory)
+        let loaded = storage.stats()
+        AppLog.shared.write("đã nạp dữ liệu: nguồn=\(storage.loadedFrom.rawValue), \(loaded.keys) khóa, \(loaded.bytes) byte")
+
         buildMainMenu()
         createWindow()
         loadPage()
         startSnapshotTimer()
-        if isSelfTest {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 60) { [weak self] in
-                self?.finishSelfTest(passed: false, detail: "timeout")
+        if options.isAnySelfTest {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 120) { [weak self] in
+                self?.failSelfTest("timeout")
             }
         }
     }
@@ -52,73 +76,81 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        guard webView != nil, let storage = storage else { return .terminateNow }
+        guard webView != nil, storage != nil else { return .terminateNow }
+        if terminating { return .terminateLater }
+        terminating = true
         snapshotTimer?.invalidate()
-        // Chụp toàn bộ localStorage lần cuối (đồng thời bảo đảm các tin nhắn lưu đã tới nơi), rồi ghi ra đĩa.
-        var replied = false
-        let finish = {
-            guard !replied else { return }
-            replied = true
-            storage.waitUntilFlushed()
+        AppLog.shared.write("thoát: lưu lần cuối")
+
+        // Kéo toàn bộ trạng thái trang về (đồng thời bảo đảm mọi tin nhắn lưu gửi trước đó đã tới nơi),
+        // ghi xuống đĩa rồi mới cho phép thoát.
+        var finished = false
+        let finish = { [weak self] in
+            guard !finished, let self = self else { return }
+            finished = true
+            let clean = self.storage.waitUntilFlushed()
+            let stats = self.storage.stats()
+            AppLog.shared.write("thoát: đã ghi \(stats.keys) khóa, \(stats.bytes) byte, sạch=\(clean)")
+            AppLog.shared.flush()
             sender.reply(toApplicationShouldTerminate: true)
         }
-        snapshotStorage { finish() }
+        pullPageState(force: true) { finish() }
         DispatchQueue.main.asyncAfter(deadline: .now() + 3) { finish() }
         return .terminateLater
     }
 
+    func applicationDidResignActive(_ notification: Notification) {
+        pullPageState(force: false)
+    }
+
     // MARK: - Lưu dữ liệu bền vững
 
-    // Lưới an toàn: ngoài việc ghi theo từng lần setItem, cứ vài giây lại chụp toàn bộ localStorage
-    // của trang ra tệp, và chụp lần cuối khi thoát hoặc khi app mất focus.
-    private static let snapshotScript = """
-    (function () {
-      var o = {};
-      try {
-        for (var i = 0; i < localStorage.length; i++) {
-          var k = localStorage.key(i);
-          o[k] = localStorage.getItem(k);
-        }
-      } catch (e) {}
-      return JSON.stringify(o);
-    })()
-    """
+    // Nguồn chuẩn là tệp storage.json; mỗi lần trang gọi GanttNative.saveState, dữ liệu được gửi sang native
+    // và ghi xuống đĩa. Ngoài ra, cứ vài giây (và khi thoát / mất focus) native kéo thêm trạng thái trong bộ
+    // nhớ của trang (GanttNative.bootState) về làm lưới an toàn nếu một tin nhắn nào đó bị thất lạc.
+    // Trang luôn được nạp với bản mới nhất trên đĩa (xem installBridgeScript) nên bản kéo về không bao giờ cũ hơn.
 
-    private func snapshotStorage(completion: (() -> Void)? = nil) {
+    func pullPageState(force: Bool, completion: (() -> Void)? = nil) {
         guard let webView = webView, let storage = storage else {
             completion?()
             return
         }
-        webView.evaluateJavaScript(AppDelegate.snapshotScript) { result, _ in
+        let script = """
+        (function (last) {
+          var g = window.GanttNative;
+          if (!g || !g.bootState) return null;
+          if (last >= 0 && g.rev === last) return null;
+          return JSON.stringify({ rev: g.rev, state: g.bootState });
+        })(\(force ? -1 : lastPulledRev))
+        """
+        webView.evaluateJavaScript(script) { [weak self] result, error in
             if let text = result as? String,
                let data = text.data(using: .utf8),
-               let entries = (try? JSONSerialization.jsonObject(with: data)) as? [String: String] {
-                storage.merge(entries)
+               let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+               let state = object["state"] as? [String: String] {
+                if let rev = object["rev"] as? Int { self?.lastPulledRev = rev }
+                storage.merge(state)
+            } else if let error = error {
+                AppLog.shared.write("kéo trạng thái từ trang thất bại: \(error.localizedDescription)")
             }
             completion?()
         }
     }
 
     private func startSnapshotTimer() {
-        guard !isSelfTest else { return }
         snapshotTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
-            self?.snapshotStorage()
+            self?.pullPageState(force: false)
         }
-    }
-
-    func applicationDidResignActive(_ notification: Notification) {
-        snapshotStorage()
     }
 
     // MARK: - Cửa sổ & WebView
 
     private func createWindow() {
-        let controller = WKUserContentController()
-        controller.addScriptMessageHandler(self, contentWorld: .page, name: "gantt")
-        controller.addUserScript(WKUserScript(source: makeBridgeScript(), injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        userContent.addScriptMessageHandler(self, contentWorld: .page, name: "gantt")
+        installBridgeScript()
 
         let config = WKWebViewConfiguration()
-        config.userContentController = controller
+        config.userContentController = userContent
         config.websiteDataStore = .default()
 
         webView = WKWebView(frame: .zero, configuration: config)
@@ -156,16 +188,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         webView.loadFileURL(page, allowingReadAccessTo: page.deletingLastPathComponent())
     }
 
+    /// Nhúng bản dữ liệu MỚI NHẤT trên đĩa vào script cầu nối. Phải gọi lại trước mỗi lần nạp lại trang,
+    /// nếu không trang sẽ khởi động bằng dữ liệu cũ của lúc mở app.
+    func installBridgeScript() {
+        userContent.removeAllUserScripts()
+        userContent.addUserScript(WKUserScript(source: makeBridgeScript(), injectionTime: .atDocumentStart, forMainFrameOnly: true))
+    }
+
     private func makeBridgeScript() -> String {
         guard let url = Bundle.main.url(forResource: "bridge", withExtension: "js"),
               let template = try? String(contentsOf: url, encoding: .utf8) else {
-            NSLog("AcademicGantt: thiếu bridge.js trong gói ứng dụng")
+            AppLog.shared.write("thiếu bridge.js trong gói ứng dụng")
             return ""
         }
         // Thay phiên bản trước để nội dung dữ liệu người dùng không bị quét lại.
         return template
             .replacingOccurrences(of: "__GANTT_VERSION__", with: jsonLiteral(appVersion))
-            .replacingOccurrences(of: "__GANTT_STORAGE__", with: jsonLiteral(storage.initialValues))
+            .replacingOccurrences(of: "__GANTT_STORAGE__", with: jsonLiteral(storage.snapshot()))
     }
 
     private func jsonLiteral(_ value: Any) -> String {
@@ -243,8 +282,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         NSWorkspace.shared.open(storage.directory)
     }
 
-    @objc private func reloadPage(_ sender: Any?) {
-        webView.reload()
+    @objc func reloadPage(_ sender: Any?) {
+        AppLog.shared.write("tải lại trang")
+        // Lưu trạng thái hiện tại trước, rồi dựng lại script cầu nối từ bản mới nhất để trang không quay về dữ liệu cũ.
+        pullPageState(force: true) { [weak self] in
+            guard let self = self else { return }
+            self.installBridgeScript()
+            self.webView.reload()
+        }
     }
 
     private var savedZoom: CGFloat {
@@ -276,7 +321,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         return alert
     }
 
-    private func present(_ alert: NSAlert, completion: @escaping (NSApplication.ModalResponse) -> Void) {
+    func present(_ alert: NSAlert, completion: @escaping (NSApplication.ModalResponse) -> Void) {
+        if options.isAnySelfTest {
+            // Chạy tự động không có người bấm: ghi lại rồi coi như bấm nút đầu tiên.
+            AppLog.shared.write("self-test: bỏ qua hộp thoại '\(alert.messageText)'")
+            completion(.alertFirstButtonReturn)
+            return
+        }
         if let window = window, window.isVisible, window.attachedSheet == nil {
             alert.beginSheetModal(for: window, completionHandler: completion)
         } else {
@@ -284,68 +335,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
     }
 
-    // MARK: - Tự kiểm tra (CI): AcademicGantt --self-test
-
-    private static func prepareSelfTestDirectory() -> URL {
-        let dir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("AcademicGantt-selftest-\(ProcessInfo.processInfo.processIdentifier)", isDirectory: true)
-        try? FileManager.default.removeItem(at: dir)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        if let seed = try? JSONSerialization.data(withJSONObject: ["__selftest_seed": "ok"]) {
-            try? seed.write(to: dir.appendingPathComponent("storage.json"))
+    /// Hộp thoại mở/lưu tệp: dạng sheet gắn vào cửa sổ chính; nếu cửa sổ đang bận (đã có sheet khác
+    /// hoặc không hiện) thì mở hộp thoại độc lập để không bao giờ "im lặng không phản ứng".
+    func present(_ panel: NSSavePanel, completion: @escaping (NSApplication.ModalResponse) -> Void) {
+        if let window = window, window.isVisible, window.attachedSheet == nil {
+            panel.beginSheetModal(for: window, completionHandler: completion)
+        } else {
+            panel.begin(completionHandler: completion)
         }
-        return dir
-    }
-
-    private func runSelfTest() {
-        let script = """
-        var r = {};
-        r.title = document.title;
-        r.bridge = !!(window.GanttNative && typeof GanttNative.fetchEvents === 'function');
-        r.nativePicker = typeof GanttNative.openTextFile === 'function' && typeof GanttNative.saveState === 'function';
-        r.bootState = !!GanttNative.bootState && GanttNative.bootState.__selftest_seed === 'ok';
-        r.seedRestored = localStorage.getItem('__selftest_seed') === 'ok';
-        r.courses = (typeof courses !== 'undefined' && Array.isArray(courses)) ? courses.length : -1;
-        var picker = document.getElementById('macCalendarPicker');
-        r.nativePanel = !!picker && picker.style.display !== 'none';
-        var pong = await window.webkit.messageHandlers.gantt.postMessage({ cmd: 'ping' });
-        r.ping = !!(pong && pong.ok);
-        localStorage.setItem('__selftest_write', 'ok');
-        GanttNative.saveState('__selftest_explicit', 'ok');
-        await new Promise(function (resolve) { setTimeout(resolve, 500); });
-        return JSON.stringify(r);
-        """
-        webView.callAsyncJavaScript(script, arguments: [:], in: nil, in: .page) { [weak self] result in
-            guard let self = self else { return }
-            switch result {
-            case .failure(let error):
-                self.finishSelfTest(passed: false, detail: "JS error: \(error)")
-            case .success(let value):
-                var checks = ((try? JSONSerialization.jsonObject(with: Data(((value as? String) ?? "{}").utf8))) as? [String: Any]) ?? [:]
-                self.storage.waitUntilFlushed()
-                let fileText = (try? String(contentsOf: self.storage.file, encoding: .utf8)) ?? ""
-                checks["storageFileWritten"] = fileText.contains("__selftest_write") && fileText.contains("__selftest_explicit")
-                checks["calendarAuthStatus"] = CalendarBridge.authorizationStatusDescription
-                let required = ["bridge", "nativePicker", "bootState", "seedRestored", "nativePanel", "ping", "storageFileWritten"]
-                let passed = required.allSatisfy { (checks[$0] as? Bool) == true } && ((checks["courses"] as? Int) ?? 0) > 0
-                self.finishSelfTest(passed: passed, detail: "\(checks)")
-            }
-        }
-    }
-
-    private func finishSelfTest(passed: Bool, detail: String) {
-        guard isSelfTest, !selfTestFinished else { return }
-        selfTestFinished = true
-        print((passed ? "SELFTEST PASS " : "SELFTEST FAIL ") + detail)
-        fflush(stdout)
-        try? FileManager.default.removeItem(at: storage.directory)
-        exit(passed ? 0 : 1)
     }
 }
 
 // MARK: - Cầu nối JS ↔ macOS
 
 extension AppDelegate: WKScriptMessageHandlerWithReply {
+    /// Chỉ nhận tin nhắn từ khung chính đang hiển thị một tệp cục bộ (trang trong gói ứng dụng).
+    /// Điều hướng sang trang web bên ngoài đã bị chặn ở decidePolicyFor; kiểm tra thêm ở đây để phòng thủ.
+    private func isTrusted(_ message: WKScriptMessage) -> Bool {
+        guard message.frameInfo.isMainFrame else { return false }
+        if message.frameInfo.securityOrigin.protocol == "file" { return true }
+        if message.webView?.url?.isFileURL == true { return true }
+        return message.frameInfo.request.url?.isFileURL == true
+    }
+
     func userContentController(_ userContentController: WKUserContentController,
                                didReceive message: WKScriptMessage,
                                replyHandler: @escaping (Any?, String?) -> Void) {
@@ -364,10 +376,10 @@ extension AppDelegate: WKScriptMessageHandlerWithReply {
             }
         }
 
-        guard message.frameInfo.isMainFrame,
-              message.frameInfo.request.url?.isFileURL == true,
+        guard isTrusted(message),
               let body = message.body as? [String: Any],
               let cmd = body["cmd"] as? String else {
+            AppLog.shared.write("từ chối tin nhắn: mainFrame=\(message.frameInfo.isMainFrame) origin=\(message.frameInfo.securityOrigin.protocol) url=\(message.webView?.url?.absoluteString ?? "nil")")
             reply(.failure(BridgeError(code: "invalid", message: "Yêu cầu không hợp lệ.")))
             return
         }
@@ -376,10 +388,18 @@ extension AppDelegate: WKScriptMessageHandlerWithReply {
         case "ping":
             reply(.success(appVersion))
         case "storageSet":
-            if let key = body["key"] as? String, let value = body["value"] as? String {
-                storage.set(key, value)
+            guard let key = body["key"] as? String, let value = body["value"] as? String else {
+                reply(.failure(BridgeError(code: "invalid", message: "Thiếu khóa hoặc giá trị cần lưu.")))
+                return
             }
-            reply(.success(true))
+            // Chỉ trả lời sau khi dữ liệu đã nằm trên đĩa, để trang biết lần lưu có thành công hay không.
+            storage.set(key, value) { error in
+                if let error = error {
+                    reply(.failure(BridgeError(code: "write_failed", message: "Không ghi được dữ liệu ra đĩa: \(error.localizedDescription)")))
+                } else {
+                    reply(.success(true))
+                }
+            }
         case "storageRemove":
             if let key = body["key"] as? String {
                 storage.remove(key)
@@ -388,6 +408,11 @@ extension AppDelegate: WKScriptMessageHandlerWithReply {
         case "storageClear":
             storage.clear()
             reply(.success(true))
+        case "backupNow":
+            let label = body["label"] as? String ?? "manual"
+            let done = storage.backupNow(label: label)
+            AppLog.shared.write("sao lưu trước '\(label)': \(done ? "đã tạo" : "bỏ qua")")
+            reply(.success(done))
         case "listCalendars":
             calendarBridge.listCalendars { reply($0.map { $0 as Any }) }
         case "fetchEvents":
@@ -415,30 +440,47 @@ extension AppDelegate: WKScriptMessageHandlerWithReply {
         panel.canChooseDirectories = false
         panel.allowsMultipleSelection = false
         if !extensions.isEmpty { panel.allowedFileTypes = extensions }
-        panel.beginSheetModal(for: window) { response in
+        present(panel) { response in
             guard response == .OK, let url = panel.url else {
                 reply(.success(false))
                 return
             }
-            do {
-                let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
-                guard size <= 20_000_000 else {
-                    reply(.failure(BridgeError(code: "too_large", message: "Tệp quá lớn (tối đa 20 MB).")))
-                    return
-                }
-                let content = try String(contentsOf: url, encoding: .utf8)
-                reply(.success(["name": url.lastPathComponent, "content": content]))
-            } catch {
-                reply(.failure(BridgeError(code: "failed", message: "Không đọc được tệp: \(error.localizedDescription)")))
-            }
+            reply(AppDelegate.readTextFile(at: url))
         }
+    }
+
+    /// Đọc tệp văn bản (UTF-8 có/không BOM, hoặc UTF-16). Tách riêng khỏi hộp thoại để kiểm thử được.
+    static func readTextFile(at url: URL) -> Result<Any, BridgeError> {
+        do {
+            let size = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0
+            guard size <= 20_000_000 else {
+                return .failure(BridgeError(code: "too_large", message: "Tệp quá lớn (tối đa 20 MB)."))
+            }
+            let data = try Data(contentsOf: url)
+            guard let text = decodeText(data) else {
+                return .failure(BridgeError(code: "decode_failed", message: "Không đọc được nội dung tệp (không phải văn bản UTF-8 / UTF-16)."))
+            }
+            return .success(["name": url.lastPathComponent, "content": text])
+        } catch {
+            return .failure(BridgeError(code: "failed", message: "Không đọc được tệp: \(error.localizedDescription)"))
+        }
+    }
+
+    static func decodeText(_ data: Data) -> String? {
+        if data.starts(with: [0xFF, 0xFE]) || data.starts(with: [0xFE, 0xFF]) {
+            return String(data: data, encoding: .utf16)
+        }
+        if let text = String(data: data, encoding: .utf8) {
+            return text.hasPrefix("\u{FEFF}") ? String(text.dropFirst()) : text
+        }
+        return String(data: data, encoding: .utf16)
     }
 
     private func saveTextFile(name: String, content: String, reply: @escaping (Result<Any, BridgeError>) -> Void) {
         let panel = NSSavePanel()
         panel.nameFieldStringValue = name
         panel.canCreateDirectories = true
-        panel.beginSheetModal(for: window) { response in
+        present(panel) { response in
             guard response == .OK, let url = panel.url else {
                 reply(.success(false))
                 return
@@ -475,18 +517,28 @@ extension AppDelegate: WKNavigationDelegate {
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        if isSelfTest { runSelfTest() }
+        lastPulledRev = -1
+        if options.smoke {
+            runSelfTest()
+        } else if let phase = options.phase {
+            runPhase(phase)
+        }
     }
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
-        finishSelfTest(passed: false, detail: "didFail: \(error)")
+        AppLog.shared.write("nạp trang thất bại: \(error)")
+        failSelfTest("didFail: \(error)")
     }
 
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
-        finishSelfTest(passed: false, detail: "didFailProvisionalNavigation: \(error)")
+        AppLog.shared.write("nạp trang thất bại (provisional): \(error)")
+        failSelfTest("didFailProvisionalNavigation: \(error)")
     }
 
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        AppLog.shared.write("tiến trình web bị dừng, nạp lại trang")
+        // Không còn kéo được trạng thái từ trang; dựng lại script từ bản đã có trên đĩa rồi nạp lại.
+        installBridgeScript()
         webView.reload()
     }
 }
@@ -536,6 +588,6 @@ extension AppDelegate: WKUIDelegate {
         panel.canChooseFiles = true
         panel.canChooseDirectories = parameters.allowsDirectories
         panel.allowsMultipleSelection = parameters.allowsMultipleSelection
-        panel.beginSheetModal(for: window) { completionHandler($0 == .OK ? panel.urls : nil) }
+        present(panel) { completionHandler($0 == .OK ? panel.urls : nil) }
     }
 }

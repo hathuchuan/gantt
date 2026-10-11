@@ -24,12 +24,29 @@ Dữ liệu cũ nằm trong trình duyệt, ứng dụng không tự đọc đư
 
 ## 3. Dữ liệu được lưu ở đâu
 
-- `~/Library/Application Support/AcademicGantt/storage.json` — ghi lại sau mỗi thay đổi (gộp trong 0,2 giây).
-- Cứ 5 giây, khi app mất focus và khi thoát, app chụp lại toàn bộ dữ liệu của trang ra tệp này.
-- `storage.backup.json` — bản của lần mở trước.
-- Mở nhanh: menu **Tệp → Mở thư mục dữ liệu**.
+Thư mục dữ liệu: `~/Library/Application Support/AcademicGantt/` (mở nhanh bằng menu **Tệp → Mở thư mục dữ liệu**).
 
-## 3b. Có gì mới ở bản 3.1.0
+| Tệp / thư mục | Nội dung |
+|---|---|
+| `storage.json` | Dữ liệu chính. Ghi xuống đĩa ngay sau mỗi thay đổi (gộp trong 0,2 giây). Đây là nguồn chuẩn: lần mở sau app đọc từ đây. |
+| `backups/` | Bản sao lưu tự động: mỗi lần mở app (nếu dữ liệu đã đổi), giữ 20 bản mới nhất. Ngoài ra có bản `...-import.json` / `...-reset.json` được tạo ngay trước khi **Nạp JSON** hoặc **Khôi Phục Mẫu**. |
+| `app.log` | Nhật ký chẩn đoán (đọc được gì lúc mở, ghi gì, thoát ra sao). Không chứa nội dung dự án. |
+| `storage.bad-*.json` | Bản `storage.json` bị hỏng/rỗng đã được cất đi khi app tự khôi phục từ `backups/`. |
+
+Cách app giữ dữ liệu an toàn:
+
+- Mỗi lần lưu, app chỉ báo **💾 Đã lưu hh:mm:ss** (góc trên bên phải) sau khi dữ liệu đã nằm trên đĩa. Nếu không ghi được, chỉ báo chuyển đỏ **⚠️ Chưa lưu được dữ liệu**; khi đó hãy bấm **Xuất JSON** để sao lưu thủ công.
+- Cứ 5 giây, khi app mất focus và khi thoát, app kéo thêm trạng thái trong bộ nhớ của trang ra đĩa (lưới an toàn).
+- **Tải lại trang** (`⌘R`) và khi tiến trình web bị dừng, trang luôn được nạp với bản mới nhất trên đĩa, không quay về bản lúc mở app.
+- `storage.json` thiếu / hỏng / rỗng mà đã có bản sao lưu → app tự khôi phục từ bản sao lưu mới nhất.
+- Dữ liệu đã lưu nhưng không đọc được → bản gốc được cất nguyên vẹn ở khóa `academic_smart_gantt_unreadable_<thời gian>` trong `storage.json` và app báo cho bạn; app **không** lặng lẽ thay bằng dữ liệu mẫu rồi ghi đè.
+
+### Khôi phục dữ liệu từ bản sao lưu
+
+1. **Tệp → Mở thư mục dữ liệu** → vào `backups/` → chọn bản gần ngày bạn cần (tên có dạng `storage-20261011-054535.json`).
+2. Trong app bấm **📤 Nạp JSON** → chọn tệp đó. **Nạp JSON** nhận cả tệp bạn xuất bằng **Xuất JSON** lẫn tệp `storage.json` / bản sao lưu của chính app.
+
+## 3b. Có gì mới ở bản 3.1.x
 
 - **Tải công việc:** mỗi công việc một dòng đánh số, màu chữ theo công đoạn (đề cương / soạn bài / giảng dạy / chấm thi).
 - **Cảnh báo quá hạn:** khối công việc đã qua ngày kết thúc mà chưa đánh dấu hoàn thành sẽ có viền cam nhấp nháy + dấu `!` trên thanh Gantt, và được liệt kê trong ô Tải công việc (bấm vào để mở dự án).
@@ -37,7 +54,8 @@ Dữ liệu cũ nằm trong trình duyệt, ứng dụng không tự đọc đư
 - **Địa điểm:** thêm **Online** (tự nhận diện Zoom / Teams / Meet khi kéo từ Calendar).
 - **Thời lượng:** 3 mức 3 / 2 / 1 tiếng.
 - **Phím Esc** đóng cửa sổ chỉnh sửa dự án.
-- **Sửa lỗi:** mất dữ liệu sau khi tắt/mở lại app; nút **Nạp JSON** và chọn tệp **.ics** không phản ứng (nay dùng hộp thoại chọn tệp của macOS, báo lỗi rõ ràng khi tệp sai).
+- **Sửa lỗi mất dữ liệu sau khi tắt/mở lại app** (xem mục 3): lưu có xác nhận + chỉ báo, nạp lại đúng bản mới nhất khi Tải lại, sao lưu tự động, tự khôi phục khi tệp hỏng, không ghi đè dữ liệu không đọc được.
+- **Sửa nút Nạp JSON / chọn tệp .ics không phản ứng:** nay dùng hộp thoại chọn tệp của macOS; báo lỗi rõ ràng khi tệp sai (không còn im lặng); nhận cả `storage.json`; sao lưu trước khi thay thế dữ liệu.
 
 ## 4. Những gì thay đổi so với `sync_server.py`
 
@@ -54,12 +72,13 @@ Tệp HTML vẫn mở được bằng trình duyệt như cũ: khi đó nó dùn
 
 ## 5. Build phiên bản mới
 
-- **Tự động (khuyến nghị):** push lên GitHub → workflow `Build macOS app` build DMG, chạy tự kiểm tra, đưa DMG vào Artifacts. Muốn có link tải cố định: tạo **Release** với tag dạng `v3.1.0` → DMG được gắn vào Release, số phiên bản lấy từ tag.
+- **Tự động (khuyến nghị):** push lên GitHub → workflow `Build macOS app` build DMG, chạy tự kiểm tra và bộ kiểm thử "tắt/mở lại app" (`macos/tests/persist.sh`, chạy app thật rồi thoát bằng ⌘Q / đóng cửa sổ / `kill -9` / tệp hỏng / tải lại trang), đưa DMG vào Artifacts. Muốn có link tải cố định: tạo **Release** với tag dạng `v3.1.1` → DMG được gắn vào Release, số phiên bản lấy từ tag.
 - **Trên máy Mac:** cài Xcode Command Line Tools một lần (`xcode-select --install`), rồi chạy `./macos/build.sh`. Kết quả nằm trong `macos/build/`.
 - **Sửa giao diện:** chỉ sửa `web/academic_gantt_planner.html` rồi build lại.
 
 ## 6. Xử lý sự cố
 
+- **Mất dữ liệu sau khi mở lại app:** mở **Tệp → Mở thư mục dữ liệu**, xem `backups/` và làm theo mục "Khôi phục dữ liệu từ bản sao lưu". Nếu vẫn lặp lại, gửi tệp `app.log` (không chứa nội dung dự án) để biết app đã đọc/ghi gì.
 - **Không đọc được lịch:** System Settings → Privacy & Security → Calendars → bật **Academic Gantt** (Full Access).
 - **Cập nhật bản mới xong thì mất quyền Lịch:** chạy `tccutil reset Calendar com.hathuchuan.academic-gantt`, mở lại ứng dụng và cấp quyền lại.
 - **Muốn bỏ hẳn cảnh báo ở bước 3:** cần tài khoản Apple Developer (99 USD/năm) để ký Developer ID và notarize.
@@ -70,6 +89,7 @@ Tệp HTML vẫn mở được bằng trình duyệt như cũ: khi đó nó dùn
 web/academic_gantt_planner.html   Giao diện (dùng chung cho ứng dụng và trình duyệt)
 macos/Sources/*.swift             Ứng dụng: cửa sổ WebView, EventKit, lưu dữ liệu
 macos/Resources/bridge.js         Cầu nối JS ↔ macOS (window.GanttNative)
+macos/tests/persist.sh            Kiểm thử "tắt rồi mở lại app" trên bản .app thật (chạy trong CI)
 macos/Info.plist, AppIcon.png     Thông tin gói và biểu tượng
 macos/build.sh                    Build .app universal + DMG
 .github/workflows/build-macos.yml Build tự động trên GitHub Actions
