@@ -60,3 +60,23 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: macos/build/*.dmg
+
+  # Kiểm thử giao diện trong Chromium (cầu nối macOS được giả lập). Chạy độc lập với việc build app.
+  web-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Cài Playwright và Chromium
+        working-directory: tests/web
+        run: |
+          npm install --no-audit --no-fund
+          npx playwright install --with-deps chromium
+
+      - name: Chạy kiểm thử giao diện
+        working-directory: tests/web
+        run: node run.js

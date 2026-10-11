@@ -73,6 +73,7 @@ Tệp HTML vẫn mở được bằng trình duyệt như cũ: khi đó nó dùn
 ## 5. Build phiên bản mới
 
 - **Tự động (khuyến nghị):** push lên GitHub → workflow `Build macOS app` build DMG, chạy tự kiểm tra và bộ kiểm thử "tắt/mở lại app" (`macos/tests/persist.sh`, chạy app thật rồi thoát bằng ⌘Q / đóng cửa sổ / `kill -9` / tệp hỏng / tải lại trang), đưa DMG vào Artifacts. Muốn có link tải cố định: tạo **Release** với tag dạng `v3.1.1` → DMG được gắn vào Release, số phiên bản lấy từ tag.
+- **Kiểm thử giao diện (Chromium):** `cd tests/web && npm install && npx playwright install chromium && node run.js` (cũng chạy tự động trên GitHub Actions). Các bộ test kiểm tra tải công việc, quá hạn, trạng thái review, địa điểm Online, thời lượng, phím Esc, nạp/xuất JSON, lưu dữ liệu và khôi phục khi dữ liệu hỏng.
 - **Trên máy Mac:** cài Xcode Command Line Tools một lần (`xcode-select --install`), rồi chạy `./macos/build.sh`. Kết quả nằm trong `macos/build/`.
 - **Sửa giao diện:** chỉ sửa `web/academic_gantt_planner.html` rồi build lại.
 
@@ -90,6 +91,7 @@ web/academic_gantt_planner.html   Giao diện (dùng chung cho ứng dụng và 
 macos/Sources/*.swift             Ứng dụng: cửa sổ WebView, EventKit, lưu dữ liệu
 macos/Resources/bridge.js         Cầu nối JS ↔ macOS (window.GanttNative)
 macos/tests/persist.sh            Kiểm thử "tắt rồi mở lại app" trên bản .app thật (chạy trong CI)
+tests/web/                        Kiểm thử giao diện bằng Playwright + Chromium
 macos/Info.plist, AppIcon.png     Thông tin gói và biểu tượng
 macos/build.sh                    Build .app universal + DMG
 .github/workflows/build-macos.yml Build tự động trên GitHub Actions
