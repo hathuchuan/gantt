@@ -16,6 +16,8 @@
   let items = E.buildItems();
 
   marked.use({ extensions: MarkedMath.extensions });
+  // DOMPurify's default drops file: links, which is what dropped files become.
+  const SAFE_URI = /^(?:(?:https?|file|mailto|tel):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i;
   const el = (tag, cls, text) => {
     const n = document.createElement(tag);
     if (cls) n.className = cls;
@@ -52,7 +54,12 @@
   }
 
   editor.addEventListener('input', onInput);
-  editor.addEventListener('click', hideSlash);
+  editor.addEventListener('click', (e) => {
+    hideSlash();
+    // ⌘-click a link in the source to open it.
+    const href = e.metaKey && editor.selectionStart === editor.selectionEnd ? E.linkAt(editor.value, editor.selectionStart) : '';
+    if (href) api.openExternal(new URL(href, document.baseURI).href);
+  });
   editor.addEventListener('blur', hideSlash);
 
   editor.addEventListener('keydown', (e) => {
@@ -192,7 +199,7 @@
 
   function renderPreview() {
     const fm = E.parseFrontMatter(editor.value);
-    preview.innerHTML = DOMPurify.sanitize(marked.parse(fm.body, { gfm: true }));
+    preview.innerHTML = DOMPurify.sanitize(marked.parse(fm.body, { gfm: true }), { ALLOWED_URI_REGEXP: SAFE_URI });
     preview.querySelectorAll('.math-ph').forEach((node) => {
       try {
         katex.render(node.dataset.tex, node, { displayMode: node.dataset.display === '1', throwOnError: false, trust: false });
@@ -526,17 +533,6 @@
     'gantt-unlink': unlinkFromGantt,
     save: () => save(false),
     'save-as': () => save(true),
-    new: async () => {
-      if (!(await canDiscard())) return;
-      await api.newDoc();
-      loadDoc(null);
-      setMode('edit');
-    },
-    open: async () => {
-      if (!(await canDiscard())) return;
-      const doc = await api.openDialog();
-      if (doc) loadDoc(doc);
-    },
     'open-path': openPath,
     'save-and-close': async () => (await save(false)) && api.closeNow(),
   };
@@ -547,10 +543,20 @@
   });
 
   addEventListener('dragover', (e) => e.preventDefault());
+  // Dropping files into the note inserts links to them (text = file name); ⌘-click or click in Preview opens them.
   addEventListener('drop', (e) => {
     e.preventDefault();
-    const f = e.dataTransfer.files[0];
-    if (f && /\.(md|markdown|txt)$/i.test(f.name)) openPath(api.pathForFile(f));
+    const paths = [...e.dataTransfer.files].map((f) => api.pathForFile(f));
+    if (!paths.some(Boolean)) return;
+    if (mode === 'preview') setMode('edit');
+    editor.focus();
+    const ed = E.dropFiles(editor.value, editor.selectionStart, editor.selectionEnd, paths);
+    if (ed) applyEdit(ed);
+  });
+
+  // The Night Mode toggle in one note window applies to all of them.
+  addEventListener('storage', (e) => {
+    if (e.key === 'night') document.documentElement.dataset.theme = e.newValue === '1' ? 'dark' : 'light';
   });
 
   addEventListener('focus', reloadCommands);

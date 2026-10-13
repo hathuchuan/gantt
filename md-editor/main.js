@@ -6,23 +6,31 @@ const Gantt = require('./gantt');
 
 const MD_FILTERS = [{ name: 'Markdown', extensions: ['md', 'markdown', 'txt'] }];
 
-let win = null;
-let filePath = null;
-let dirty = false;
-let forceClose = false;
-let pendingOpen = null;
+// One window per note. Each window has its own state, keyed by its webContents id.
+const wins = new Map(); // webContents.id → { win, filePath, dirty, forceClose, ready }
+let pendingOpens = [];
 let nightItem = null;
 
-const send = (action, payload) => win && !win.isDestroyed() && win.webContents.send('menu', action, payload);
+const stateOf = (e) => wins.get(e.sender.id);
+const focusedState = () => {
+  const w = BrowserWindow.getFocusedWindow();
+  return w && wins.get(w.webContents.id);
+};
+const send = (st, action, payload) => st && !st.win.isDestroyed() && st.win.webContents.send('menu', action, payload);
 
 function docInfo(p, content) {
   return { path: p, name: path.basename(p), dir: path.dirname(p), content };
 }
 
-function createWindow() {
-  win = new BrowserWindow({
+const samePath = (a, b) => a && b && path.resolve(a) === path.resolve(b);
+
+function createWindow(openPath) {
+  const from = focusedState();
+  const at = from ? from.win.getPosition() : null;
+  const win = new BrowserWindow({
     width: 900,
     height: 720,
+    ...(at ? { x: at[0] + 26, y: at[1] + 26 } : {}),
     minWidth: 420,
     minHeight: 320,
     show: false,
@@ -36,19 +44,21 @@ function createWindow() {
       sandbox: true,
     },
   });
+  const id = win.webContents.id;
+  const st = { win, filePath: openPath || null, dirty: false, forceClose: false, ready: false };
+  wins.set(id, st);
+
   win.loadFile(path.join(__dirname, 'src', 'index.html'));
   win.once('ready-to-show', () => win.show());
   win.webContents.on('did-finish-load', () => {
-    if (pendingOpen) {
-      send('open-path', pendingOpen);
-      pendingOpen = null;
-    }
+    st.ready = true;
+    if (st.filePath) send(st, 'open-path', st.filePath);
   });
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.webContents.on('will-navigate', (e) => e.preventDefault());
 
   win.on('close', (e) => {
-    if (forceClose || !dirty) return;
+    if (st.forceClose || !st.dirty) return;
     e.preventDefault();
     const choice = dialog.showMessageBoxSync(win, {
       type: 'warning',
@@ -58,31 +68,47 @@ function createWindow() {
       defaultId: 0,
       cancelId: 2,
     });
-    if (choice === 0) send('save-and-close');
+    if (choice === 0) send(st, 'save-and-close');
     else if (choice === 1) {
-      forceClose = true;
+      st.forceClose = true;
       win.close();
     }
   });
-  win.on('closed', () => {
-    win = null;
-    filePath = null;
-    dirty = false;
-    forceClose = false;
-  });
+  win.on('closed', () => wins.delete(id));
+  return st;
+}
+
+// Opens a note in its own window; focuses the window that already has it; reuses an untouched blank window.
+function openFile(p) {
+  if (!p) return;
+  for (const st of wins.values()) {
+    if (samePath(st.filePath, p)) {
+      if (st.win.isMinimized()) st.win.restore();
+      st.win.show();
+      st.win.focus();
+      return;
+    }
+  }
+  const blank = [...wins.values()].find((st) => !st.filePath && !st.dirty);
+  if (blank) {
+    blank.filePath = p; // claim it now so a second request for the same file focuses this window
+    if (blank.ready) send(blank, 'open-path', p); // otherwise did-finish-load sends it
+    blank.win.show();
+    blank.win.focus();
+  } else createWindow(p);
 }
 
 function buildMenu() {
-  const item = (label, accelerator, action) => ({ label, accelerator, click: () => send(action) });
-  nightItem = { label: 'Night Mode', type: 'checkbox', accelerator: 'CmdOrCtrl+Shift+D', click: () => send('night') };
+  const item = (label, accelerator, action) => ({ label, accelerator, click: () => send(focusedState(), action) });
+  nightItem = { label: 'Night Mode', type: 'checkbox', accelerator: 'CmdOrCtrl+Shift+D', click: () => send(focusedState(), 'night') };
   Menu.setApplicationMenu(
     Menu.buildFromTemplate([
       { role: 'appMenu' },
       {
         label: 'File',
         submenu: [
-          item('New', 'CmdOrCtrl+N', 'new'),
-          item('Open…', 'CmdOrCtrl+O', 'open'),
+          { label: 'New', accelerator: 'CmdOrCtrl+N', click: () => createWindow() },
+          { label: 'Open…', accelerator: 'CmdOrCtrl+O', click: () => openDialog() },
           { type: 'separator' },
           item('Save', 'CmdOrCtrl+S', 'save'),
           item('Save As…', 'CmdOrCtrl+Shift+S', 'save-as'),
@@ -129,47 +155,57 @@ function buildMenu() {
   );
 }
 
-async function saveTo(target, content) {
+async function saveTo(st, target, content) {
   await fs.promises.writeFile(target, content, 'utf8');
-  filePath = target;
+  const moved = !samePath(st.filePath, target);
+  st.filePath = target;
+  // A note linked to a Gantt block that is saved under a new name/place: tell Gantt where it went.
+  const block = Gantt.blockOfText(content);
+  if (moved && block) askGantt('link', { block, path: target }, false);
   return docInfo(target, content);
 }
 
-async function askSavePath() {
-  const r = await dialog.showSaveDialog(win, {
-    defaultPath: filePath || 'Untitled.md',
+async function askSavePath(st) {
+  const r = await dialog.showSaveDialog(st.win, {
+    defaultPath: st.filePath || 'Untitled.md',
     filters: MD_FILTERS,
   });
   return r.canceled ? null : r.filePath;
 }
 
-ipcMain.handle('file:open', async () => {
-  const r = await dialog.showOpenDialog(win, { properties: ['openFile'], filters: MD_FILTERS });
-  if (r.canceled || !r.filePaths[0]) return null;
-  return readDoc(r.filePaths[0]);
-});
+async function openDialog() {
+  const parent = BrowserWindow.getFocusedWindow() || undefined;
+  const r = await dialog.showOpenDialog(parent, { properties: ['openFile', 'multiSelections'], filters: MD_FILTERS });
+  if (!r.canceled) r.filePaths.forEach(openFile);
+}
 
-async function readDoc(p) {
-  const content = await fs.promises.readFile(p, 'utf8');
-  filePath = p;
+async function readDoc(st, p) {
+  let content;
+  try {
+    content = await fs.promises.readFile(p, 'utf8');
+  } catch (err) {
+    if (samePath(st.filePath, p)) st.filePath = null;
+    throw err;
+  }
+  st.filePath = p;
   app.addRecentDocument(p);
   return docInfo(p, content);
 }
 
-ipcMain.handle('file:read', (_e, p) => readDoc(p));
-ipcMain.handle('file:save', async (_e, content) => {
-  const target = filePath || (await askSavePath());
-  return target ? saveTo(target, content) : null;
+ipcMain.handle('file:read', (e, p) => readDoc(stateOf(e), p));
+ipcMain.handle('file:save', async (e, content) => {
+  const st = stateOf(e);
+  const target = st.filePath || (await askSavePath(st));
+  return target ? saveTo(st, target, content) : null;
 });
-ipcMain.handle('file:save-as', async (_e, content) => {
-  const target = await askSavePath();
-  return target ? saveTo(target, content) : null;
+ipcMain.handle('file:save-as', async (e, content) => {
+  const st = stateOf(e);
+  const target = await askSavePath(st);
+  return target ? saveTo(st, target, content) : null;
 });
-ipcMain.handle('file:new', () => {
-  filePath = null;
-});
-ipcMain.handle('doc:confirm-discard', async () => {
-  const r = await dialog.showMessageBox(win, {
+ipcMain.handle('doc:confirm-discard', async (e) => {
+  const st = stateOf(e);
+  const r = await dialog.showMessageBox(st.win, {
     type: 'warning',
     message: 'Save changes to this document?',
     detail: 'Your changes will be lost if you don’t save them.',
@@ -261,20 +297,28 @@ function createNote({ block, course, label, start, end }) {
       fs.writeFileSync(file, Gantt.noteFrontMatter({ block, course, label, start, end }));
       return file;
     }
-    if (fs.readFileSync(file, 'utf8').includes(`gantt-block: ${block}`)) return file;
+    if (Gantt.blockOfText(fs.readFileSync(file, 'utf8')) === block) return file;
   }
 }
 
+function readGanttStorage() {
+  try {
+    return JSON.parse(fs.readFileSync(ganttStorageFile(), 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+// ⌘-click on a Gantt block: open that block's note. A new note is created only when none exists anywhere.
 async function handleNoteUrl(q) {
   const block = q.get('block');
   if (!block) return;
-  const existing = q.get('path');
-  let file = existing && path.isAbsolute(existing) && NOTE_RE.test(existing) && fs.existsSync(existing) ? existing : null;
-  if (!file) {
-    file = createNote({ block, course: q.get('course') || 'Gantt', label: q.get('label') || '', start: q.get('start'), end: q.get('end') });
-    askGantt('link', { block, path: file }, false); // runs in the background: don't steal focus from the editor
-  }
-  requestOpen(file);
+  const given = q.get('path');
+  let file = Gantt.findNote({ block, path: given, storage: readGanttStorage(), notesDir: notesDir() });
+  if (!file) file = createNote({ block, course: q.get('course') || 'Gantt', label: q.get('label') || '', start: q.get('start'), end: q.get('end') });
+  // Gantt's link is missing or stale (note moved/renamed, or the first "link" message got lost): repair it in the background.
+  if (!samePath(given, file)) askGantt('link', { block, path: file }, false);
+  openFile(file);
 }
 
 ipcMain.handle('gantt:blocks', () => {
@@ -291,37 +335,54 @@ ipcMain.handle('gantt:link', (_e, { block, file }) =>
 );
 ipcMain.handle('gantt:unlink', (_e, block) => (typeof block === 'string' ? askGantt('unlink', { block }, false) : { error: 'invalid' }));
 
-ipcMain.on('doc:state', (_e, s) => {
-  dirty = !!s.dirty;
-  if (!win) return;
-  win.setTitle(s.name);
-  win.setDocumentEdited(dirty);
-  win.setRepresentedFilename(filePath || '');
+ipcMain.on('doc:state', (e, s) => {
+  const st = stateOf(e);
+  if (!st) return;
+  st.dirty = !!s.dirty;
+  st.win.setTitle(s.name);
+  st.win.setDocumentEdited(st.dirty);
+  st.win.setRepresentedFilename(st.filePath || '');
 });
-ipcMain.on('win:close-now', () => {
-  forceClose = true;
-  win && win.close();
+ipcMain.on('win:close-now', (e) => {
+  const st = stateOf(e);
+  if (!st) return;
+  st.forceClose = true;
+  st.win.close();
 });
 ipcMain.on('ui:theme', (_e, dark) => {
   nativeTheme.themeSource = dark ? 'dark' : 'light';
-  if (win) win.setBackgroundColor(dark ? '#1c1c1e' : '#ffffff');
+  for (const st of wins.values()) st.win.setBackgroundColor(dark ? '#1c1c1e' : '#ffffff');
   if (nightItem) nightItem.checked = !!dark;
 });
-ipcMain.on('shell:open', (_e, url) => {
-  try {
-    const u = new URL(url);
-    if (['http:', 'https:', 'mailto:'].includes(u.protocol)) shell.openExternal(u.href);
-  } catch {}
-});
 
-function requestOpen(p) {
-  if (win) send('open-path', p);
-  else pendingOpen = p;
+// Links dropped into a note or written by hand: file:// opens the file (notes open in their own window), web links open in the browser.
+const RISKY_EXT = /\.(app|command|sh|bash|zsh|terminal|workflow|action|pkg|dmg|jar|scpt|scptd|js|py|pl|rb|exe|bat|cmd)$/i;
+function openLink(url) {
+  let u;
+  try {
+    u = new URL(url);
+  } catch {
+    return;
+  }
+  if (['http:', 'https:', 'mailto:'].includes(u.protocol)) return void shell.openExternal(u.href);
+  if (u.protocol !== 'file:') return;
+  let p;
+  try {
+    p = decodeURIComponent(u.pathname);
+  } catch {
+    return;
+  }
+  if (!fs.existsSync(p)) return void dialog.showMessageBox({ type: 'info', message: 'File not found', detail: p });
+  if (NOTE_RE.test(p)) openFile(p);
+  else if (RISKY_EXT.test(p)) shell.showItemInFolder(p); // never run a program because a note links to it
+  else shell.openPath(p);
 }
+ipcMain.on('shell:open', (_e, url) => openLink(String(url)));
 
 app.on('open-file', (e, p) => {
   e.preventDefault();
-  requestOpen(p);
+  if (app.isReady()) openFile(p);
+  else pendingOpens.push(p);
 });
 
 // mdeditor://note?... (from Academic Gantt) and mdeditor://open?path=/abs/note.md
@@ -333,16 +394,18 @@ app.on('open-url', (e, url) => {
     if (u.hostname === 'note') app.whenReady().then(() => handleNoteUrl(u.searchParams));
     else if (u.hostname === 'open') {
       const p = u.searchParams.get('path');
-      if (p && path.isAbsolute(p) && NOTE_RE.test(p)) requestOpen(p);
+      if (p && path.isAbsolute(p) && NOTE_RE.test(p)) app.whenReady().then(() => openFile(p));
     }
   } catch {}
 });
 
 app.whenReady().then(() => {
   buildMenu();
-  const arg = process.argv.slice(app.isPackaged ? 1 : 2).find((a) => /\.(md|markdown|txt)$/i.test(a));
-  if (arg && !pendingOpen) pendingOpen = path.resolve(arg);
-  createWindow();
+  const args = process.argv.slice(app.isPackaged ? 1 : 2).filter((a) => NOTE_RE.test(a)).map((a) => path.resolve(a));
+  const first = [...pendingOpens, ...args];
+  pendingOpens = [];
+  if (first.length) first.forEach(openFile);
+  else createWindow();
   app.on('activate', () => BrowserWindow.getAllWindows().length === 0 && createWindow());
 });
 app.on('window-all-closed', () => process.platform !== 'darwin' && app.quit());

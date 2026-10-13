@@ -100,4 +100,72 @@ function noteFrontMatter({ block, course, label, start, end }) {
   return `---\n${lines.join('\n')}\n---\n\n# ${one(label) || one(course)}\n\n`;
 }
 
-module.exports = { readBlocks, courseBlocks, addDays, safeName, noteFrontMatter };
+// ---------- finding the note that belongs to a block ----------
+const fs = require('fs');
+const nodePath = require('path');
+
+const NOTE_EXT = /\.(md|markdown|txt)$/i;
+
+// The `gantt-block:` value of a note's front matter ('' when it has none).
+function blockOfText(text) {
+  const fm = /^---\r?\n([\s\S]*?)\r?\n---/.exec(String(text || '').replace(/^﻿/, ''));
+  const line = fm && /^gantt-block:[ \t]*(.+?)[ \t]*$/m.exec(fm[1]);
+  return line ? line[1] : '';
+}
+
+function readHead(file, bytes = 4096) {
+  let fd;
+  try {
+    fd = fs.openSync(file, 'r');
+    const buf = Buffer.alloc(bytes);
+    return buf.toString('utf8', 0, fs.readSync(fd, buf, 0, bytes, 0));
+  } catch {
+    return '';
+  } finally {
+    if (fd !== undefined) fs.closeSync(fd);
+  }
+}
+
+const usable = (p) => typeof p === 'string' && nodePath.isAbsolute(p) && NOTE_EXT.test(p) && fs.existsSync(p);
+
+// Looks through `dir` (a few levels deep) for a note tagged with `block`.
+function scanForBlock(dir, block, depth = 4, budget = { files: 3000 }) {
+  let entries;
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return null;
+  }
+  for (const e of entries) {
+    if (e.name.startsWith('.')) continue;
+    const full = nodePath.join(dir, e.name);
+    if (e.isFile() && NOTE_EXT.test(e.name)) {
+      if (--budget.files < 0) return null;
+      if (blockOfText(readHead(full)) === block) return full;
+    }
+  }
+  if (depth > 0) {
+    for (const e of entries) {
+      if (e.isDirectory() && !e.name.startsWith('.')) {
+        const hit = scanForBlock(nodePath.join(dir, e.name), block, depth - 1, budget);
+        if (hit) return hit;
+      }
+    }
+  }
+  return null;
+}
+
+// Where is the note of `block`? Tries the path Gantt sent, then the link saved in Gantt's storage,
+// then any note in the notes folder whose front matter names the block (e.g. renamed or moved there).
+function findNote({ block, path: given, storage, notesDir }) {
+  if (usable(given)) return given;
+  let links = {};
+  try {
+    links = JSON.parse((storage && storage.academic_smart_gantt_notes) || '{}') || {};
+  } catch {}
+  const saved = links[block] && links[block].path;
+  if (usable(saved)) return saved;
+  return (notesDir && scanForBlock(notesDir, block)) || null;
+}
+
+module.exports = { readBlocks, courseBlocks, addDays, safeName, noteFrontMatter, blockOfText, findNote };

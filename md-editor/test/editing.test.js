@@ -155,3 +155,22 @@ test('front matter: attach, replace and clear the Gantt link', () => {
   assert.strictEqual(v, '---\ntags: a\n---\nbody');
   assert.strictEqual(E.clearGantt('plain', 0, 0), null);
 });
+
+test('dropped files become links named after the file', () => {
+  assert.strictEqual(E.fileLink('/Users/a/My Docs/báo cáo (v2).pdf'), '[báo cáo (v2).pdf](file:///Users/a/My%20Docs/b%C3%A1o%20c%C3%A1o%20%28v2%29.pdf)');
+  assert.strictEqual(E.fileLink('/x/a_b[1].md'), '[a\\_b\\[1\\].md](file:///x/a_b%5B1%5D.md)');
+  const ed = E.dropFiles('see: ', 5, 5, ['/a/one.pdf', '/a/two.png']);
+  assert.strictEqual(ed.text, '[one.pdf](file:///a/one.pdf)\n[two.png](file:///a/two.png)');
+  const mid = E.dropFiles('ab', 1, 1, ['/a/x.pdf']);
+  assert.strictEqual(mid.text, ' [x.pdf](file:///a/x.pdf) ');
+  assert.strictEqual(E.dropFiles('', 0, 0, []), null);
+});
+
+test('linkAt finds the target of the link under the caret', () => {
+  const v = 'one [a](file:///x/a.pdf) and [b](https://e.com)\nnext';
+  assert.strictEqual(E.linkAt(v, 8), 'file:///x/a.pdf');
+  assert.strictEqual(E.linkAt(v, 35), 'https://e.com');
+  assert.strictEqual(E.linkAt(v, 1), '');
+  assert.strictEqual(E.linkAt(v, 26), '');
+  assert.strictEqual(E.linkAt(E.fileLink('/u/a b.pdf'), 3), 'file:///u/a%20b.pdf');
+});

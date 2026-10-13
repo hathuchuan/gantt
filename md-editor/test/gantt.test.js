@@ -50,3 +50,32 @@ test('safe names and note front matter', () => {
   assert.ok(fm.startsWith('---\ngantt-block: c1|session_teach|1\ngantt-title: QTCL — Buổi 1\n'));
   assert.ok(fm.endsWith('---\n\n# Buổi 1\n\n'));
 });
+
+test('findNote: given path, saved link, or a note tagged with the block anywhere in the notes folder', () => {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gantt-notes-'));
+  const sub = path.join(root, 'Course', 'moved');
+  fs.mkdirSync(sub, { recursive: true });
+  const tag = (b) => G.noteFrontMatter({ block: b, course: 'C', label: 'L' });
+  const one = path.join(sub, 'renamed.md');
+  const ten = path.join(root, 'Course', 'ten.md');
+  fs.writeFileSync(one, tag('c1|session_teach|1') + 'mine');
+  fs.writeFileSync(ten, tag('c1|session_teach|10'));
+  const stored = path.join(root, 'elsewhere.md');
+  fs.writeFileSync(stored, 'plain');
+
+  assert.strictEqual(G.blockOfText(tag('c1|x|1')), 'c1|x|1');
+  assert.strictEqual(G.blockOfText('no front matter'), '');
+  // 1. the path Gantt sent
+  assert.strictEqual(G.findNote({ block: 'c1|session_teach|1', path: ten, notesDir: root }), ten);
+  // 2. the link saved in Gantt's storage when the path is stale
+  const storage = { academic_smart_gantt_notes: JSON.stringify({ 'c1|a|1': { path: stored } }) };
+  assert.strictEqual(G.findNote({ block: 'c1|a|1', path: '/gone.md', storage, notesDir: root }), stored);
+  // 3. scan: renamed/moved note is found by its front matter; block 1 is not confused with block 10
+  assert.strictEqual(G.findNote({ block: 'c1|session_teach|1', path: '/gone.md', notesDir: root }), one);
+  assert.strictEqual(G.findNote({ block: 'c1|session_teach|10', notesDir: root }), ten);
+  assert.strictEqual(G.findNote({ block: 'c1|none|9', notesDir: root }), null);
+  fs.rmSync(root, { recursive: true, force: true });
+});

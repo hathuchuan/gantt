@@ -271,6 +271,38 @@
     return edit(from, s, text, from + a, from + b);
   }
 
+  // ---------- links to local files ----------
+  // `[file name](file:///path/file%20name.pdf)` — the link text defaults to the file name.
+  function fileLink(p) {
+    const parts = String(p).split('/');
+    const name = parts[parts.length - 1] || String(p);
+    const enc = (x) => encodeURIComponent(x).replace(/\(/g, '%28').replace(/\)/g, '%29');
+    return `[${name.replace(/[\\\[\]*_`<>~]/g, '\\$&')}](file://${parts.map(enc).join('/')})`;
+  }
+
+  // Replace the selection with links to the dropped files (one per line when there are several).
+  function dropFiles(v, s, e, paths) {
+    const links = paths.filter(Boolean).map(fileLink);
+    if (!links.length) return null;
+    const lead = s > 0 && !/\s/.test(v[s - 1]) ? ' ' : '';
+    const trail = e < v.length && !/\s/.test(v[e]) ? ' ' : '';
+    const text = lead + links.join('\n') + trail;
+    const caret = s + lead.length + links.join('\n').length;
+    return edit(s, e, text, caret);
+  }
+
+  // The target of the Markdown link `[text](target)` that contains position `pos`, or ''.
+  function linkAt(v, pos) {
+    const ls = lineStart(v, pos);
+    const line = v.slice(ls, lineEnd(v, pos));
+    const re = /\[(?:\\.|[^\]\\])*\]\(([^)\s]*)\)/g;
+    let m;
+    while ((m = re.exec(line))) {
+      if (pos - ls >= m.index && pos - ls <= m.index + m[0].length) return m[1];
+    }
+    return '';
+  }
+
   // ---------- Academic Gantt link (front matter) ----------
   const FM_RE = /^---\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/;
   const GANTT_KEYS = /^gantt-(block|title|start|end):/;
@@ -314,6 +346,6 @@
   return {
     onEnter, onTab, wrap, link, pasteUrl, autoPair, onBackspace, heading,
     slashQuery, filterSlash, applySlash, buildItems, SLASH_ITEMS,
-    parseFrontMatter, setGantt, clearGantt,
+    parseFrontMatter, setGantt, clearGantt, fileLink, dropFiles, linkAt,
   };
 });

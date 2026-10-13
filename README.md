@@ -1,3 +1,20 @@
+# Academic Suite — Academic Gantt + MD Editor
+
+Một repo, một bộ cài, hai ứng dụng macOS:
+
+| Ứng dụng | Thư mục | Dùng để |
+|---|---|---|
+| **Academic Gantt** | `web/`, `macos/` | Lập kế hoạch giảng dạy / nghiên cứu / tư vấn trên Gantt, đọc Apple Calendar |
+| **MD Editor** | `md-editor/` | Soạn ghi chú Markdown; mỗi ghi chú một cửa sổ riêng |
+
+**Cài đặt một lần:** tải `AcademicSuite-<phiên bản>.dmg` (GitHub → Releases, hoặc Actions → artifact `AcademicSuite-macOS`), kéo cả hai ứng dụng vào Applications.
+
+- **Dùng độc lập:** mỗi ứng dụng chạy riêng được, không cần ứng dụng kia.
+- **Dùng cùng nhau:** ⌘-nhấp một khối trên Gantt → mở đúng ghi chú của khối trong MD Editor (chưa có thì tạo mới); trong MD Editor `⇧⌘G` → nhảy tới khối trên Gantt. Mở mỗi ứng dụng ít nhất một lần sau khi cài để macOS đăng ký liên kết.
+- **Build bộ cài:** `./scripts/build-suite.sh` → `dist/AcademicSuite-<phiên bản>.dmg` (CI tự chạy ở job `suite`). Chi tiết riêng từng app: bên dưới (Gantt) và `md-editor/README.md`.
+
+---
+
 # Academic Gantt Planner — ứng dụng macOS
 
 Ứng dụng macOS độc lập: giao diện Gantt (`web/academic_gantt_planner.html`) chạy trong cửa sổ riêng và **đọc trực tiếp Apple Calendar qua EventKit**. Không cần Python, Terminal hay `sync_server.py`.

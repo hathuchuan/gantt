@@ -3,6 +3,7 @@
 # Yêu cầu: macOS + Xcode Command Line Tools (xcode-select --install).
 # Dùng: ./macos/build.sh            → macos/build/AcademicGantt-<version>.dmg
 #       VERSION=3.1.0 ./macos/build.sh
+#       SKIP_DMG=1 ./macos/build.sh   → chỉ tạo .app (scripts/build-suite.sh dùng cách này)
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -51,6 +52,12 @@ iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/AppIcon.icns"
 echo "==> Ký ad-hoc"
 codesign --force --sign - "$APP"
 codesign --verify --strict "$APP"
+
+if [ -n "${SKIP_DMG:-}" ]; then
+  rm -rf "$BUILD/AppIcon.iconset" "$BUILD/$EXEC" "$BUILD/$EXEC-arm64" "$BUILD/$EXEC-x86_64"
+  echo "==> Xong (không tạo DMG): $APP"
+  exit 0
+fi
 
 echo "==> Tạo DMG"
 STAGE="$BUILD/dmg"
