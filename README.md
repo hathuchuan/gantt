@@ -58,6 +58,13 @@ Cách app giữ dữ liệu an toàn:
 - **Sửa lỗi mất dữ liệu sau khi tắt/mở lại app** (xem mục 3): lưu có xác nhận + chỉ báo, nạp lại đúng bản mới nhất khi Tải lại, sao lưu tự động, tự khôi phục khi tệp hỏng, không ghi đè dữ liệu không đọc được.
 - **Sửa nút Nạp JSON / chọn tệp .ics không phản ứng:** nay dùng hộp thoại chọn tệp của macOS; báo lỗi rõ ràng khi tệp sai (không còn im lặng); nhận cả `storage.json`; sao lưu trước khi thay thế dữ liệu.
 
+## 3c. Ghi chú Markdown cho từng khối (liên kết 2 chiều với MD Editor)
+
+- **⌘-nhấp** vào một thanh trên Gantt (hoặc nhấp biểu tượng 📄 trên thanh) → mở ghi chú của khối đó trong **MD Editor**; chưa có thì MD Editor tự tạo ghi chú mới rồi gửi đường dẫn về Gantt. Nhấp thường vẫn là đánh dấu hoàn thành.
+- Từ MD Editor: `⇧⌘G` (hoặc bấm nhãn trên Preview) → Gantt hiện ra, cuộn tới đúng khối và nhấp nháy. `⇧⌘E` / `/gantt` để gắn một ghi chú có sẵn vào khối.
+- Hai ứng dụng nói chuyện qua URL: `mdeditor://note?...` (Gantt → MD Editor) và `academicgantt://open|link|unlink?block=...` (MD Editor → Gantt). Mã khối có dạng `<mã dự án>|<loại>|<số>`.
+- Liên kết lưu ở khóa `academic_smart_gantt_notes` trong `storage.json` (tách khỏi danh sách dự án nên không mất khi đồng bộ Calendar). Chưa nằm trong **Xuất JSON**.
+
 ## 4. Những gì thay đổi so với `sync_server.py`
 
 | Hạng mục | Trước (HTML + `sync_server.py`) | Nay (ứng dụng) |

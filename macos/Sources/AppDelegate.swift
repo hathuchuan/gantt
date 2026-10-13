@@ -29,6 +29,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var selfTestFinished = false
     var reloadStep = 0
 
+    // academicgantt://... nhận được trước khi trang nạp xong được giữ lại rồi chuyển cho trang sau (xem NoteLinks).
+    var pendingAppURLs: [String] = []
+    var pageReady = false
+
     var appVersion: String {
         (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String) ?? "dev"
     }
@@ -423,6 +427,8 @@ extension AppDelegate: WKScriptMessageHandlerWithReply {
                 NSWorkspace.shared.open(url)
             }
             reply(.success(true))
+        case "openURL":
+            openMarkdownEditorURL(body["url"] as? String, reply: reply)
         case "openTextFile":
             openTextFile(extensions: body["extensions"] as? [String] ?? [], reply: reply)
         case "saveTextFile":
@@ -536,6 +542,7 @@ extension AppDelegate: WKNavigationDelegate {
             // Mọi lần nạp khung chính (mở app, Tải lại, khôi phục tiến trình web, điều hướng) đều phải nhận script
             // cầu nối dựng từ bản dữ liệu mới nhất trên đĩa; nếu không trang sẽ khởi động bằng dữ liệu cũ.
             if navigationAction.targetFrame?.isMainFrame ?? true {
+                pageReady = false
                 installBridgeScript()
             }
             decisionHandler(.allow)
@@ -550,6 +557,8 @@ extension AppDelegate: WKNavigationDelegate {
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         lastPulledRev = -1
+        pageReady = true
+        flushPendingAppURLs()
         if options.smoke {
             runSelfTest()
         } else if let phase = options.phase {

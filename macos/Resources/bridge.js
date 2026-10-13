@@ -51,6 +51,8 @@
     // Sao lưu nguyên trạng thái trên đĩa trước một thao tác phá hủy (nạp JSON, khôi phục mẫu).
     backupNow: function (label) { return call('backupNow', { label: String(label || 'manual') }); },
     // Hộp thoại chọn tệp văn bản của macOS. Trả về { name, content } hoặc false nếu bấm Hủy.
+    // Mở địa chỉ mdeditor:// (ghi chú Markdown). Reject nếu chưa cài MD Editor.
+    openURL: function (url) { return call('openURL', { url: String(url) }); },
     openTextFile: function (extensions) { return call('openTextFile', { extensions: extensions || [] }); },
     listCalendars: function () { return call('listCalendars'); },
     fetchEvents: function (calendarIds) { return call('fetchEvents', { calendarIds: calendarIds || [] }); },
