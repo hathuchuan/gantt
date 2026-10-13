@@ -4,7 +4,7 @@
 const { spawnSync } = require('child_process');
 const path = require('path');
 
-const suites = ['features.test.js', 'persistence.test.js', 'native-bridge.test.js', 'note-links.test.js'];
+const suites = ['features.test.js', 'persistence.test.js', 'native-bridge.test.js', 'note-links.test.js', 'ui-v2.test.js'];
 let failed = 0;
 for (const suite of suites) {
   console.log('\n===== ' + suite + ' =====');
