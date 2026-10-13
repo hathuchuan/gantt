@@ -55,11 +55,51 @@ jobs:
           path: macos/build/*.dmg
           if-no-files-found: error
 
+  # Bộ cài chung: Academic Gantt + MD Editor trong một DMG (đây là tệp dùng để phát hành).
+  suite:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: md-editor/package-lock.json
+
+      - name: Build bộ cài (Gantt + MD Editor)
+        env:
+          BUILD_NUMBER: ${{ github.run_number }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          if [ -n "$RELEASE_TAG" ]; then export VERSION="${RELEASE_TAG#v}"; fi
+          ./scripts/build-suite.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AcademicSuite-macOS
+          path: dist/*.dmg
+          if-no-files-found: error
+
       - name: Đính kèm DMG vào Release
         if: github.event_name == 'release'
         uses: softprops/action-gh-release@v2
         with:
-          files: macos/build/*.dmg
+          files: dist/*.dmg
+
+  md-editor-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: md-editor/package-lock.json
+      - run: npm ci
+        working-directory: md-editor
+      - run: npm test
+        working-directory: md-editor
 
   # Kiểm thử giao diện trong Chromium (cầu nối macOS được giả lập). Chạy độc lập với việc build app.
   web-tests:
