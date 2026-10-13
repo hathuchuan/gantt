@@ -238,6 +238,15 @@ final class StorageMirror {
         queue.asyncAfter(deadline: .now() + 0.2, execute: item)
     }
 
+    /// Chép danh sách dự án sang thư mục Scriptable trên iCloud Drive để widget iPhone đọc (bỏ qua nếu chưa cài Scriptable).
+    private func exportForWidget() {
+        guard let courses = values["academic_smart_gantt"], !courses.isEmpty else { return }
+        let dir = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Mobile Documents/iCloud~dk~simonbs~Scriptable/Documents", isDirectory: true)
+        guard FileManager.default.fileExists(atPath: dir.path) else { return }
+        try? Data(courses.utf8).write(to: dir.appendingPathComponent("gantt_courses.json"), options: .atomic)
+    }
+
     private func drainWaiters(_ error: Error?) {
         let list = waiters
         waiters.removeAll()
@@ -249,6 +258,7 @@ final class StorageMirror {
         do {
             let data = try JSONSerialization.data(withJSONObject: values, options: [.prettyPrinted, .sortedKeys])
             try data.write(to: file, options: .atomic)
+            exportForWidget()
             if failedFlushes > 0 { AppLog.shared.write("ghi dữ liệu đã hoạt động lại sau \(failedFlushes) lần lỗi") }
             failedFlushes = 0
             dirty = false
