@@ -8,7 +8,7 @@
   const LIST_RE = /^(\s*)(?:([-*+])|(\d+)\.)(\s+)(\[[ xX]\]\s+)?/;
   const QUOTE_RE = /^\s*(?:>\s?)+/;
   const PAIRS = { '(': ')', '[': ']', '{': '}', '`': '`' };
-  const WRAP_ONLY = new Set(['*', '_', '~', '"']);
+  const WRAP_ONLY = new Set(['*', '_', '~', '"', '$']);
   const CLOSERS = new Set([')', ']', '}', '`']);
   const URL_RE = /^https?:\/\/\S+$/;
 
@@ -130,41 +130,176 @@
     return edit(ls, le, text, ls + text.length);
   }
 
-  const today = () => new Date().toISOString().slice(0, 10);
+  // ---------- slash commands ----------
+  const pad = (n) => String(n).padStart(2, '0');
+  const fmtDate = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const fmtTime = (d) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+  // Variables usable in command text: {date} {time} {datetime} {weekday}; {cursor} marks the caret.
+  function expand(text, now) {
+    return text.replace(/\{(date|time|datetime|weekday)\}/g, (_, k) =>
+      k === 'date' ? fmtDate(now) : k === 'time' ? fmtTime(now) : k === 'weekday' ? WEEKDAYS[now.getDay()] : fmtDate(now) + ' ' + fmtTime(now)
+    );
+  }
+
+  const it = (group, key, label, hint, text, extra) => ({ group, key, label, hint, text, ...extra });
+  const BLOCK = { block: true };
   const SLASH_ITEMS = [
-    { key: 'h1', label: 'Heading 1', hint: '#', text: '# ' },
-    { key: 'h2', label: 'Heading 2', hint: '##', text: '## ' },
-    { key: 'h3', label: 'Heading 3', hint: '###', text: '### ' },
-    { key: 'list', label: 'Bullet list', hint: '-', text: '- ' },
-    { key: 'numbered', label: 'Numbered list', hint: '1.', text: '1. ' },
-    { key: 'todo', label: 'To-do list', hint: '[ ]', text: '- [ ] ' },
-    { key: 'quote', label: 'Quote', hint: '>', text: '> ' },
-    { key: 'code', label: 'Code block', hint: '```', text: '```\n\n```', caret: 4 },
-    { key: 'table', label: 'Table', hint: '|', text: '| Column | Column |\n| --- | --- |\n|  |  |', select: [2, 8] },
-    { key: 'link', label: 'Link', hint: '[]()', text: '[text](url)', select: [1, 5] },
-    { key: 'image', label: 'Image', hint: '![]()', text: '![alt](url)', select: [2, 5] },
-    { key: 'divider', label: 'Divider', hint: '---', text: '---\n' },
-    { key: 'date', label: 'Today’s date', hint: '', get text() { return today(); } },
+    it('Blocks', 'h1', 'Heading 1', '#', '# ', BLOCK),
+    it('Blocks', 'h2', 'Heading 2', '##', '## ', BLOCK),
+    it('Blocks', 'h3', 'Heading 3', '###', '### ', BLOCK),
+    it('Blocks', 'list', 'Bullet list', '•', '- ', BLOCK),
+    it('Blocks', 'numbered', 'Numbered list', '1.', '1. ', BLOCK),
+    it('Blocks', 'todo', 'To-do list', '☐', '- [ ] ', BLOCK),
+    it('Blocks', 'quote', 'Quote', '>', '> ', BLOCK),
+    it('Blocks', 'code', 'Code block', '</>', '```\n{cursor}\n```', BLOCK),
+    it('Blocks', 'table', 'Table', '▦', '| Column | Column |\n| --- | --- |\n|  |  |', { block: true, select: [2, 8] }),
+    it('Blocks', 'divider', 'Divider', '—', '---\n', BLOCK),
+
+    it('Text', 'bold', 'Bold', 'B', '**{cursor}**'),
+    it('Text', 'italic', 'Italic', 'I', '*{cursor}*'),
+    it('Text', 'bolditalic', 'Bold italic', 'BI', '***{cursor}***'),
+    it('Text', 'strike', 'Strikethrough', 'S̶', '~~{cursor}~~'),
+    it('Text', 'inlinecode', 'Inline code', '`', '`{cursor}`'),
+    it('Text', 'highlight', 'Highlight', '▮', '<mark>{cursor}</mark>'),
+    it('Text', 'underline', 'Underline', 'U', '<u>{cursor}</u>'),
+    it('Text', 'superscript', 'Superscript', 'x²', '<sup>{cursor}</sup>'),
+    it('Text', 'subscript', 'Subscript', 'x₂', '<sub>{cursor}</sub>'),
+    it('Text', 'keyboard', 'Keyboard key', '⌘', '<kbd>{cursor}</kbd>'),
+    it('Text', 'comment', 'Hidden comment', '<!', '<!-- {cursor} -->'),
+    it('Text', 'link', 'Link', '🔗', '[text](url)', { select: [1, 5] }),
+    it('Text', 'image', 'Image', '▣', '![alt](url)', { select: [2, 5] }),
+
+    it('Insert', 'date', 'Today’s date', '📅', '{date}'),
+    it('Insert', 'time', 'Current time', '🕒', '{time}'),
+    it('Insert', 'event', 'Attach to calendar event', '📎', null, { action: 'event' }),
+
+    it('Math', 'math', 'Inline math', '$', '${cursor}$'),
+    it('Math', 'mathblock', 'Math block', '$$', '$$\n{cursor}\n$$', BLOCK),
+    it('Math', 'align', 'Aligned equations', '=', '$$\n\\begin{aligned}\n{cursor}\n\\end{aligned}\n$$', BLOCK),
+    it('Math', 'frac', 'Fraction', 'a/b', '\\frac{{cursor}}{}'),
+    it('Math', 'sqrt', 'Square root', '√', '\\sqrt{{cursor}}'),
+    it('Math', 'root', 'Nth root', 'ⁿ√', '\\sqrt[n]{{cursor}}'),
+    it('Math', 'power', 'Superscript (math)', 'xⁿ', '^{{cursor}}'),
+    it('Math', 'index', 'Subscript (math)', 'xₙ', '_{{cursor}}'),
+    it('Math', 'sum', 'Sum', 'Σ', '\\sum_{i=1}^{n} {cursor}'),
+    it('Math', 'prod', 'Product', 'Π', '\\prod_{i=1}^{n} {cursor}'),
+    it('Math', 'int', 'Integral', '∫', '\\int_{a}^{b} {cursor}\\,dx'),
+    it('Math', 'lim', 'Limit', 'lim', '\\lim_{x \\to \\infty} {cursor}'),
+    it('Math', 'partial', 'Partial derivative', '∂', '\\frac{\\partial {cursor}}{\\partial x}'),
+    it('Math', 'matrix', 'Matrix', '[ ]', '\\begin{pmatrix} {cursor} & \\\\ & \\end{pmatrix}'),
+    it('Math', 'cases', 'Cases', '{', '\\begin{cases} {cursor} & \\text{if } \\\\ & \\text{otherwise} \\end{cases}'),
+    it('Math', 'vec', 'Vector', '→', '\\vec{{cursor}}'),
+    it('Math', 'hat', 'Hat', 'x̂', '\\hat{{cursor}}'),
+    it('Math', 'bar', 'Overline', 'x̄', '\\overline{{cursor}}'),
+    it('Math', 'dot', 'Time derivative', 'ẋ', '\\dot{{cursor}}'),
+    it('Math', 'text', 'Text in math', 'T', '\\text{{cursor}}'),
+    it('Math', 'mathbf', 'Math bold', '𝐱', '\\mathbf{{cursor}}'),
+    it('Math', 'mathcal', 'Calligraphic', '𝓛', '\\mathcal{{cursor}}'),
+    it('Math', 'mathbb', 'Blackboard bold', 'ℝ', '\\mathbb{{cursor}}'),
+    ...[
+      ['alpha', 'α'], ['beta', 'β'], ['gamma', 'γ'], ['delta', 'δ'], ['epsilon', 'ε'], ['zeta', 'ζ'], ['eta', 'η'],
+      ['theta', 'θ'], ['lambda', 'λ'], ['mu', 'μ'], ['pi', 'π'], ['rho', 'ρ'], ['sigma', 'σ'], ['tau', 'τ'],
+      ['phi', 'φ'], ['chi', 'χ'], ['psi', 'ψ'], ['omega', 'ω'],
+    ].map(([n, g]) => it('Math', n, n[0].toUpperCase() + n.slice(1), g, '\\' + n)),
+    ...[
+      ['Gamma', 'Γ'], ['Delta', 'Δ'], ['Theta', 'Θ'], ['Lambda', 'Λ'], ['Pi', 'Π'], ['Sigma', 'Σ'], ['Phi', 'Φ'], ['Psi', 'Ψ'], ['Omega', 'Ω'],
+    ].map(([n, g]) => it('Math', n, n + ' (capital)', g, '\\' + n)),
+    ...[
+      ['times', '×'], ['cdot', '·'], ['pm', '±'], ['leq', '≤'], ['geq', '≥'], ['neq', '≠'], ['approx', '≈'], ['equiv', '≡'],
+      ['to', '→'], ['implies', '⇒'], ['iff', '⇔'], ['in', '∈'], ['subset', '⊂'], ['cup', '∪'], ['cap', '∩'],
+      ['forall', '∀'], ['exists', '∃'], ['nabla', '∇'], ['infty', '∞'], ['ldots', '…'],
+    ].map(([n, g]) => it('Math', n, n[0].toUpperCase() + n.slice(1), g, '\\' + n)),
   ];
 
-  // Detects "/query" typed at the start of a line.
+  // Combine built-ins with the user's commands.json ({ disabled: [keys], custom: [{key,label,text,...}] }).
+  function buildItems(config = {}) {
+    const disabled = new Set(Array.isArray(config.disabled) ? config.disabled : []);
+    const custom = (Array.isArray(config.custom) ? config.custom : [])
+      .filter((c) => c && typeof c.key === 'string' && /^[\w-]+$/.test(c.key) && typeof c.text === 'string')
+      .map((c) => ({
+        group: 'Custom',
+        key: c.key,
+        label: typeof c.label === 'string' && c.label ? c.label : c.key,
+        hint: typeof c.hint === 'string' ? c.hint : '',
+        text: c.text,
+        block: !!c.block,
+        custom: true,
+      }));
+    const overridden = new Set(custom.map((c) => c.key));
+    return SLASH_ITEMS.filter((i) => !overridden.has(i.key))
+      .concat(custom)
+      .map((i) => ({ ...i, enabled: !disabled.has(i.key) }));
+  }
+
+  // Detects "/query" typed at the start of a line, or "/query" (1+ chars) after whitespace mid-line.
   function slashQuery(v, s) {
     const ls = lineStart(v, s);
-    const m = /^(\s*)\/([\w-]*)$/.exec(v.slice(ls, s));
-    return m ? { query: m[2].toLowerCase(), from: ls + m[1].length } : null;
+    const before = v.slice(ls, s);
+    let m = /^(\s*)\/([\w-]*)$/.exec(before);
+    if (m) return { query: m[2].toLowerCase(), from: ls + m[1].length, lineStart: true };
+    m = /(?:^|\s)\/([\w-]+)$/.exec(before);
+    return m ? { query: m[1].toLowerCase(), from: s - m[1].length - 1, lineStart: false } : null;
   }
 
-  function filterSlash(query) {
-    const hit = (i) => i.key.includes(query) || i.label.toLowerCase().includes(query);
-    const items = SLASH_ITEMS.filter(hit);
-    return items.sort((a, b) => Number(b.key.startsWith(query)) - Number(a.key.startsWith(query)));
+  // Prefix filter: "h" keeps commands starting with h, "he" narrows further, ...
+  function filterSlash(query, items = SLASH_ITEMS, opts = {}) {
+    const atLineStart = opts.lineStart !== false;
+    const q = query.toLowerCase();
+    const pool = items.filter((i) => i.enabled !== false && (atLineStart || !i.block));
+    if (!q) return pool;
+    const rank = (i) => (i.key.toLowerCase().startsWith(q) ? 0 : i.label.toLowerCase().startsWith(q) ? 1 : -1);
+    return pool
+      .map((i, idx) => [rank(i), idx, i])
+      .filter((x) => x[0] >= 0)
+      .sort((a, b) => a[0] - b[0] || a[1] - b[1])
+      .map((x) => x[2]);
   }
 
-  function applySlash(v, s, from, item) {
-    const text = item.text;
-    const [a, b] = item.select || [item.caret ?? text.length, item.caret ?? text.length];
+  function applySlash(v, s, from, item, now = new Date()) {
+    let text = expand(item.text || '', now);
+    let a;
+    let b;
+    if (item.select) [a, b] = item.select;
+    else {
+      const c = text.indexOf('{cursor}');
+      text = text.split('{cursor}').join('');
+      a = b = c >= 0 ? c : text.length;
+    }
     return edit(from, s, text, from + a, from + b);
   }
 
-  return { onEnter, onTab, wrap, link, pasteUrl, autoPair, onBackspace, heading, slashQuery, filterSlash, applySlash, SLASH_ITEMS };
+  // ---------- calendar event front matter ----------
+  const FM_RE = /^---\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/;
+  const EVENT_KEYS = /^(event|event-start|event-id):/;
+
+  function parseFrontMatter(v) {
+    const m = FM_RE.exec(v);
+    if (!m) return { meta: {}, body: v, length: 0, lines: [] };
+    const lines = m[1].split(/\r?\n/);
+    const meta = {};
+    for (const line of lines) {
+      const k = /^([\w-]+):\s*(.*)$/.exec(line);
+      if (k) meta[k[1]] = k[2].trim();
+    }
+    return { meta, body: v.slice(m[0].length), length: m[0].length, lines };
+  }
+
+  // Attach (or replace) the calendar event in the document's front matter.
+  function setEvent(v, s, e, ev) {
+    const fm = parseFrontMatter(v);
+    const clean = (x) => String(x).replace(/\s*\n\s*/g, ' ').trim();
+    const lines = [`event: ${clean(ev.title)}`, `event-start: ${clean(ev.start)}`, `event-id: ${clean(ev.id)}`]
+      .concat(fm.lines.filter((l) => !EVENT_KEYS.test(l)));
+    const text = `---\n${lines.join('\n')}\n---\n` + (fm.length ? '' : '\n');
+    const delta = text.length - fm.length;
+    return edit(0, fm.length, text, Math.max(text.length, s + delta), Math.max(text.length, e + delta));
+  }
+
+  return {
+    onEnter, onTab, wrap, link, pasteUrl, autoPair, onBackspace, heading,
+    slashQuery, filterSlash, applySlash, buildItems, SLASH_ITEMS,
+    parseFrontMatter, setEvent,
+  };
 });

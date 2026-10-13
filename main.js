@@ -1,5 +1,6 @@
 const { app, BrowserWindow, Menu, dialog, ipcMain, shell, nativeTheme } = require('electron');
 const fs = require('fs');
+const { execFile } = require('child_process');
 const path = require('path');
 
 const MD_FILTERS = [{ name: 'Markdown', extensions: ['md', 'markdown', 'txt'] }];
@@ -85,6 +86,8 @@ function buildMenu() {
           item('Save', 'CmdOrCtrl+S', 'save'),
           item('Save As…', 'CmdOrCtrl+Shift+S', 'save-as'),
           { type: 'separator' },
+          item('Attach to Calendar Event…', 'CmdOrCtrl+Shift+E', 'event'),
+          { type: 'separator' },
           { role: 'close' },
         ],
       },
@@ -101,6 +104,8 @@ function buildMenu() {
           item('Heading 1', 'CmdOrCtrl+1', 'fmt:h1'),
           item('Heading 2', 'CmdOrCtrl+2', 'fmt:h2'),
           item('Heading 3', 'CmdOrCtrl+3', 'fmt:h3'),
+          { type: 'separator' },
+          item('Commands…', null, 'commands'),
         ],
       },
       {
@@ -172,6 +177,92 @@ ipcMain.handle('doc:confirm-discard', async () => {
   return ['save', 'discard', 'cancel'][r.response];
 });
 
+// ---------- custom commands (commands.json in the app data folder) ----------
+const commandsFile = () => path.join(app.getPath('userData'), 'commands.json');
+const COMMANDS_EXAMPLE = {
+  disabled: [],
+  custom: [
+    {
+      key: 'meeting',
+      label: 'Meeting notes',
+      hint: '📝',
+      block: true,
+      text: '## Meeting — {date}\n\n**Attendees:** {cursor}\n\n### Notes\n\n### Action items\n- [ ] ',
+    },
+  ],
+};
+
+function readCommands() {
+  try {
+    const j = JSON.parse(fs.readFileSync(commandsFile(), 'utf8'));
+    return { disabled: Array.isArray(j.disabled) ? j.disabled : [], custom: Array.isArray(j.custom) ? j.custom : [], raw: j };
+  } catch (err) {
+    if (err.code === 'ENOENT') return { disabled: [], custom: [], raw: {} };
+    return { disabled: [], custom: [], raw: null, error: 'commands.json is not valid JSON' };
+  }
+}
+
+ipcMain.handle('commands:load', () => {
+  const { disabled, custom, error } = readCommands();
+  return { disabled, custom, error };
+});
+ipcMain.handle('commands:set-disabled', (_e, disabled) => {
+  const cur = readCommands();
+  if (cur.error) return { error: cur.error };
+  const next = { ...cur.raw, disabled: [...new Set((disabled || []).filter((k) => typeof k === 'string'))] };
+  fs.mkdirSync(path.dirname(commandsFile()), { recursive: true });
+  fs.writeFileSync(commandsFile(), JSON.stringify(next, null, 2) + '\n');
+  return {};
+});
+ipcMain.handle('commands:open-file', async () => {
+  if (!fs.existsSync(commandsFile())) {
+    fs.mkdirSync(path.dirname(commandsFile()), { recursive: true });
+    fs.writeFileSync(commandsFile(), JSON.stringify(COMMANDS_EXAMPLE, null, 2) + '\n');
+  }
+  return shell.openPath(commandsFile());
+});
+
+// ---------- calendar (EventKit helper, macOS only) ----------
+const helperPath = () =>
+  app.isPackaged ? path.join(process.resourcesPath, 'calendar-helper') : path.join(__dirname, 'build', 'calendar-helper');
+
+function runHelper(args) {
+  return new Promise((resolve) => {
+    const bin = helperPath();
+    if (process.platform !== 'darwin' || !fs.existsSync(bin)) {
+      return resolve({ error: 'unavailable' });
+    }
+    execFile(bin, args, { timeout: 120000, maxBuffer: 8 * 1024 * 1024 }, (err, stdout) => {
+      try {
+        resolve({ data: JSON.parse(stdout) });
+      } catch {
+        resolve({ error: err ? err.message : 'bad output' });
+      }
+    });
+  });
+}
+
+const isoSeconds = (d) => d.toISOString().replace(/\.\d{3}Z$/, 'Z');
+
+ipcMain.handle('calendar:list', async (_e, range) => {
+  const day = 86400000;
+  const from = new Date(range && range.from ? range.from : Date.now() - 7 * day);
+  const to = new Date(range && range.to ? range.to : Date.now() + 21 * day);
+  const r = await runHelper(['list', isoSeconds(from), isoSeconds(to)]);
+  if (r.error) return { error: r.error };
+  if (r.data && r.data.error) return { error: r.data.error };
+  return { events: r.data };
+});
+
+ipcMain.handle('calendar:link', async (_e, { id, start, file }) => {
+  if (!file || !path.isAbsolute(file)) return { error: 'note must be saved first' };
+  const url = 'mdeditor://open?path=' + encodeURIComponent(file);
+  const r = await runHelper(['link', String(id), String(start), url]);
+  if (r.error) return { error: r.error };
+  if (r.data && r.data.error) return { error: r.data.error };
+  return {};
+});
+
 ipcMain.on('doc:state', (_e, s) => {
   dirty = !!s.dirty;
   if (!win) return;
@@ -195,10 +286,24 @@ ipcMain.on('shell:open', (_e, url) => {
   } catch {}
 });
 
-app.on('open-file', (e, p) => {
-  e.preventDefault();
+function requestOpen(p) {
   if (win) send('open-path', p);
   else pendingOpen = p;
+}
+
+app.on('open-file', (e, p) => {
+  e.preventDefault();
+  requestOpen(p);
+});
+
+// mdeditor://open?path=/abs/note.md — written into calendar events by "Attach to Calendar Event".
+app.on('open-url', (e, url) => {
+  e.preventDefault();
+  try {
+    const u = new URL(url);
+    const p = u.protocol === 'mdeditor:' && u.searchParams.get('path');
+    if (p && path.isAbsolute(p) && /\.(md|markdown|txt)$/i.test(p)) requestOpen(p);
+  } catch {}
 });
 
 app.whenReady().then(() => {

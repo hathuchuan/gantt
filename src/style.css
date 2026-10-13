@@ -82,16 +82,61 @@ body[data-mode='preview'] #toggle .i-pen { display: block; }
 /* Slash menu */
 #slash {
   position: fixed; z-index: 20; margin: 0; padding: 6px; list-style: none;
-  min-width: 220px; max-height: 280px; overflow-y: auto;
+  min-width: 300px; max-height: 300px; overflow-y: auto;
   background: var(--bg); border: 1px solid var(--line); border-radius: 10px;
   box-shadow: var(--shadow); font-size: 13px;
 }
 #slash li {
-  display: flex; justify-content: space-between; gap: 24px;
+  display: flex; align-items: baseline; gap: 10px;
   padding: 6px 10px; border-radius: 6px; cursor: pointer;
 }
-#slash li span { color: var(--muted); font-family: var(--mono); font-size: 12px; }
 #slash li.active { background: var(--code-bg); }
+.hint { width: 28px; flex: none; text-align: center; color: var(--muted); font-family: var(--mono); font-size: 12px; }
+.label { flex: 1; }
+.key { color: var(--muted); font-family: var(--mono); font-size: 12px; }
+#slash b { font-weight: 650; color: var(--accent); }
+
+/* Sheet (commands, calendar events) */
+#sheet {
+  position: fixed; inset: 0; z-index: 30; display: grid; place-items: start center; padding-top: 12vh;
+  background: rgba(0, 0, 0, 0.18);
+}
+.sheet-box {
+  width: min(560px, calc(100vw - 32px)); max-height: 70vh; display: flex; flex-direction: column;
+  background: var(--bg); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow);
+}
+.sheet-box header { display: flex; justify-content: space-between; align-items: center; padding: 14px 18px 6px; }
+.sheet-box h2 { margin: 0; font-size: 15px; font-weight: 650; }
+#sheet-close { border: 0; background: none; color: var(--muted); font-size: 14px; cursor: pointer; border-radius: 6px; padding: 4px 8px; }
+#sheet-close:hover { color: var(--fg); background: var(--code-bg); }
+#sheet-body { padding: 4px 18px 16px; overflow-y: auto; font-size: 13px; }
+.note { color: var(--muted); font-size: 12px; margin: 6px 0 10px; line-height: 1.5; }
+.note.error { color: #d93025; }
+.sheet-box .filter {
+  width: 100%; margin: 6px 0 4px; padding: 8px 10px; font: inherit; color: var(--fg);
+  background: var(--code-bg); border: 1px solid var(--line); border-radius: 8px; outline: 0;
+}
+.cmd-group {
+  display: flex; justify-content: space-between; align-items: center;
+  margin: 14px 0 4px; font-size: 11px; font-weight: 650; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted);
+}
+.cmd-group .link, .sheet-foot button {
+  border: 0; background: none; padding: 2px 6px; border-radius: 6px; cursor: pointer;
+  font: inherit; font-size: 12px; text-transform: none; letter-spacing: 0; color: var(--accent);
+}
+.cmd-group .link:hover, .sheet-foot button:hover { background: var(--code-bg); }
+.cmd-row, .event-row { display: flex; align-items: baseline; gap: 10px; padding: 5px 6px; border-radius: 6px; cursor: pointer; }
+.cmd-row:hover, .event-row:hover, .event-row.active { background: var(--code-bg); }
+.cmd-row input { align-self: center; accent-color: var(--accent); }
+.event-row .when { width: 64px; flex: none; color: var(--muted); font-variant-numeric: tabular-nums; }
+.sheet-foot { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
+.sheet-foot .note { margin: 0; }
+
+#toast {
+  position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%); z-index: 40;
+  padding: 8px 14px; border-radius: 10px; font-size: 13px; max-width: 80vw;
+  background: var(--fg); color: var(--bg); box-shadow: var(--shadow);
+}
 
 /* Preview typography */
 #preview { font-size: 16px; line-height: 1.75; }
@@ -116,3 +161,11 @@ body[data-mode='preview'] #toggle .i-pen { display: block; }
 #preview table { border-collapse: collapse; width: 100%; font-size: 0.95em; }
 #preview th, #preview td { padding: 8px 12px; border-bottom: 1px solid var(--line); text-align: left; }
 #preview th { font-weight: 600; }
+
+#preview .event-chip {
+  display: inline-block; margin: 0 0 1.6em; padding: 4px 12px; font-size: 13px;
+  color: var(--muted); background: var(--code-bg); border-radius: 999px;
+}
+#preview .math-ph[data-display] { display: block; margin: 1.1em 0; overflow-x: auto; text-align: center; }
+#preview mark { background: rgba(255, 214, 10, 0.35); color: inherit; padding: 0 0.15em; border-radius: 3px; }
+#preview kbd { font: 0.85em var(--mono); padding: 0.1em 0.45em; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 5px; }

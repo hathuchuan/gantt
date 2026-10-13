@@ -9,12 +9,14 @@
     "dompurify": "^3.4.17",
     "electron": "^44.7.0",
     "electron-builder": "^26.15.3",
+    "katex": "^0.19.0",
     "marked": "^18.1.1"
   },
   "scripts": {
     "start": "electron .",
-    "test": "node --test test/editing.test.js",
-    "dist": "electron-builder --mac --publish never"
+    "test": "node --test test/editing.test.js test/math.test.js",
+    "dist": "npm run build:helper && electron-builder --mac --publish never",
+    "build:helper": "mkdir -p build && swiftc -O native/calendar-helper.swift -o build/calendar-helper -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __info_plist -Xlinker native/Info.plist"
   },
   "build": {
     "appId": "com.hathuchuan.mdeditor",
@@ -42,7 +44,25 @@
           "name": "Markdown",
           "role": "Editor"
         }
-      ]
-    }
+      ],
+      "extendInfo": {
+        "NSCalendarsUsageDescription": "MD Editor links notes to your calendar events.",
+        "NSCalendarsFullAccessUsageDescription": "MD Editor links notes to your calendar events."
+      }
+    },
+    "extraResources": [
+      {
+        "from": "build/calendar-helper",
+        "to": "calendar-helper"
+      }
+    ],
+    "protocols": [
+      {
+        "name": "MD Editor note",
+        "schemes": [
+          "mdeditor"
+        ]
+      }
+    ]
   }
 }
