@@ -128,7 +128,7 @@ body[data-mode='preview'] #toggle .i-pen { display: block; }
 .cmd-row, .event-row { display: flex; align-items: baseline; gap: 10px; padding: 5px 6px; border-radius: 6px; cursor: pointer; }
 .cmd-row:hover, .event-row:hover, .event-row.active { background: var(--code-bg); }
 .cmd-row input { align-self: center; accent-color: var(--accent); }
-.event-row .when { width: 64px; flex: none; color: var(--muted); font-variant-numeric: tabular-nums; }
+.event-row .when { width: 108px; flex: none; white-space: nowrap; color: var(--muted); font-variant-numeric: tabular-nums; }
 .sheet-foot { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
 .sheet-foot .note { margin: 0; }
 
@@ -163,9 +163,10 @@ body[data-mode='preview'] #toggle .i-pen { display: block; }
 #preview th { font-weight: 600; }
 
 #preview .event-chip {
-  display: inline-block; margin: 0 0 1.6em; padding: 4px 12px; font-size: 13px;
-  color: var(--muted); background: var(--code-bg); border-radius: 999px;
+  display: inline-block; margin: 0 0 1.2em; padding: 4px 12px; font: inherit; font-size: 13px; cursor: pointer;
+  color: var(--muted); background: var(--code-bg); border: 0; border-radius: 999px;
 }
+#preview .event-chip:hover { color: var(--fg); }
 #preview .math-ph[data-display] { display: block; margin: 1.1em 0; overflow-x: auto; text-align: center; }
 #preview mark { background: rgba(255, 214, 10, 0.35); color: inherit; padding: 0 0.15em; border-radius: 3px; }
 #preview kbd { font: 0.85em var(--mono); padding: 0.1em 0.45em; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 5px; }

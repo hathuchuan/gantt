@@ -15,7 +15,9 @@ contextBridge.exposeInMainWorld('api', {
   loadCommands: () => ipcRenderer.invoke('commands:load'),
   setDisabledCommands: (keys) => ipcRenderer.invoke('commands:set-disabled', keys),
   openCommandsFile: () => ipcRenderer.invoke('commands:open-file'),
-  listEvents: (range) => ipcRenderer.invoke('calendar:list', range),
-  linkEvent: (info) => ipcRenderer.invoke('calendar:link', info),
+  ganttBlocks: () => ipcRenderer.invoke('gantt:blocks'),
+  ganttOpen: (block) => ipcRenderer.invoke('gantt:open', block),
+  ganttLink: (info) => ipcRenderer.invoke('gantt:link', info),
+  ganttUnlink: (block) => ipcRenderer.invoke('gantt:unlink', block),
   onMenu: (cb) => ipcRenderer.on('menu', (_e, action, payload) => cb(action, payload)),
 });

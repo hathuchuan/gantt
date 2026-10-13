@@ -1,7 +1,8 @@
 const { app, BrowserWindow, Menu, dialog, ipcMain, shell, nativeTheme } = require('electron');
 const fs = require('fs');
-const { execFile } = require('child_process');
+const os = require('os');
 const path = require('path');
+const Gantt = require('./gantt');
 
 const MD_FILTERS = [{ name: 'Markdown', extensions: ['md', 'markdown', 'txt'] }];
 
@@ -86,7 +87,9 @@ function buildMenu() {
           item('Save', 'CmdOrCtrl+S', 'save'),
           item('Save As…', 'CmdOrCtrl+Shift+S', 'save-as'),
           { type: 'separator' },
-          item('Attach to Calendar Event…', 'CmdOrCtrl+Shift+E', 'event'),
+          item('Link to Gantt Block…', 'CmdOrCtrl+Shift+E', 'gantt'),
+          item('Show in Gantt', 'CmdOrCtrl+Shift+G', 'gantt-open'),
+          item('Unlink from Gantt', null, 'gantt-unlink'),
           { type: 'separator' },
           { role: 'close' },
         ],
@@ -222,46 +225,71 @@ ipcMain.handle('commands:open-file', async () => {
   return shell.openPath(commandsFile());
 });
 
-// ---------- calendar (EventKit helper, macOS only) ----------
-const helperPath = () =>
-  app.isPackaged ? path.join(process.resourcesPath, 'calendar-helper') : path.join(__dirname, 'build', 'calendar-helper');
+// ---------- Academic Gantt integration ----------
+// Gantt → note : mdeditor://note?block=…&course=…&label=…&start=…&end=…[&path=…]
+// note → Gantt : academicgantt://open?block=…  |  link?block=…&path=…  |  unlink?block=…
+const settingsFile = () => path.join(app.getPath('userData'), 'settings.json');
+const ganttStorageFile = () => path.join(os.homedir(), 'Library', 'Application Support', 'AcademicGantt', 'storage.json');
+const NOTE_RE = /\.(md|markdown|txt)$/i;
 
-function runHelper(args) {
-  return new Promise((resolve) => {
-    const bin = helperPath();
-    if (process.platform !== 'darwin' || !fs.existsSync(bin)) {
-      return resolve({ error: 'unavailable' });
-    }
-    execFile(bin, args, { timeout: 120000, maxBuffer: 8 * 1024 * 1024 }, (err, stdout) => {
-      try {
-        resolve({ data: JSON.parse(stdout) });
-      } catch {
-        resolve({ error: err ? err.message : 'bad output' });
-      }
-    });
-  });
+function notesDir() {
+  try {
+    const j = JSON.parse(fs.readFileSync(settingsFile(), 'utf8'));
+    if (typeof j.notesDir === 'string' && j.notesDir) return j.notesDir.replace(/^~(?=$|\/)/, os.homedir());
+  } catch {}
+  return path.join(os.homedir(), 'Documents', 'Gantt Notes');
 }
 
-const isoSeconds = (d) => d.toISOString().replace(/\.\d{3}Z$/, 'Z');
+const localToday = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
 
-ipcMain.handle('calendar:list', async (_e, range) => {
-  const day = 86400000;
-  const from = new Date(range && range.from ? range.from : Date.now() - 7 * day);
-  const to = new Date(range && range.to ? range.to : Date.now() + 21 * day);
-  const r = await runHelper(['list', isoSeconds(from), isoSeconds(to)]);
-  if (r.error) return { error: r.error };
-  if (r.data && r.data.error) return { error: r.data.error };
-  return { events: r.data };
-});
+const askGantt = (action, params, activate) =>
+  shell
+    .openExternal(`academicgantt://${action}?` + Object.entries(params).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&'), { activate })
+    .then(() => ({}), () => ({ error: 'no-gantt' }));
 
-ipcMain.handle('calendar:link', async (_e, { id, start, file }) => {
-  if (!file || !path.isAbsolute(file)) return { error: 'note must be saved first' };
-  const url = 'mdeditor://open?path=' + encodeURIComponent(file);
-  const r = await runHelper(['link', String(id), String(start), url]);
-  if (r.error) return { error: r.error };
-  if (r.data && r.data.error) return { error: r.data.error };
-  return {};
+// Creates the note for a block (or reuses the one already tagged with the same block id).
+function createNote({ block, course, label, start, end }) {
+  const dir = path.join(notesDir(), Gantt.safeName(course));
+  fs.mkdirSync(dir, { recursive: true });
+  const base = Gantt.safeName(label || block);
+  for (let n = 1; ; n++) {
+    const file = path.join(dir, base + (n > 1 ? ` ${n}` : '') + '.md');
+    if (!fs.existsSync(file)) {
+      fs.writeFileSync(file, Gantt.noteFrontMatter({ block, course, label, start, end }));
+      return file;
+    }
+    if (fs.readFileSync(file, 'utf8').includes(`gantt-block: ${block}`)) return file;
+  }
+}
+
+async function handleNoteUrl(q) {
+  const block = q.get('block');
+  if (!block) return;
+  const existing = q.get('path');
+  let file = existing && path.isAbsolute(existing) && NOTE_RE.test(existing) && fs.existsSync(existing) ? existing : null;
+  if (!file) {
+    file = createNote({ block, course: q.get('course') || 'Gantt', label: q.get('label') || '', start: q.get('start'), end: q.get('end') });
+    askGantt('link', { block, path: file }, false); // runs in the background: don't steal focus from the editor
+  }
+  requestOpen(file);
+}
+
+ipcMain.handle('gantt:blocks', () => {
+  try {
+    const storage = JSON.parse(fs.readFileSync(ganttStorageFile(), 'utf8'));
+    return { blocks: Gantt.readBlocks(storage, { today: localToday() }) };
+  } catch {
+    return { error: 'no-data' };
+  }
 });
+ipcMain.handle('gantt:open', (_e, block) => (typeof block === 'string' ? askGantt('open', { block }, true) : { error: 'invalid' }));
+ipcMain.handle('gantt:link', (_e, { block, file }) =>
+  typeof block === 'string' && path.isAbsolute(String(file)) ? askGantt('link', { block, path: file }, false) : { error: 'invalid' }
+);
+ipcMain.handle('gantt:unlink', (_e, block) => (typeof block === 'string' ? askGantt('unlink', { block }, false) : { error: 'invalid' }));
 
 ipcMain.on('doc:state', (_e, s) => {
   dirty = !!s.dirty;
@@ -296,13 +324,17 @@ app.on('open-file', (e, p) => {
   requestOpen(p);
 });
 
-// mdeditor://open?path=/abs/note.md — written into calendar events by "Attach to Calendar Event".
+// mdeditor://note?... (from Academic Gantt) and mdeditor://open?path=/abs/note.md
 app.on('open-url', (e, url) => {
   e.preventDefault();
   try {
     const u = new URL(url);
-    const p = u.protocol === 'mdeditor:' && u.searchParams.get('path');
-    if (p && path.isAbsolute(p) && /\.(md|markdown|txt)$/i.test(p)) requestOpen(p);
+    if (u.protocol !== 'mdeditor:') return;
+    if (u.hostname === 'note') app.whenReady().then(() => handleNoteUrl(u.searchParams));
+    else if (u.hostname === 'open') {
+      const p = u.searchParams.get('path');
+      if (p && path.isAbsolute(p) && NOTE_RE.test(p)) requestOpen(p);
+    }
   } catch {}
 });
 

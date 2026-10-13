@@ -134,19 +134,24 @@ test('custom commands, overrides and disabling', () => {
   assert.ok(!items.some((i) => i.key === 'bad key' || i.key === 'nope'));
 });
 
-test('front matter: parse and attach event', () => {
-  const ev = { title: 'Team sync', start: '2026-10-14T10:00:00+07:00', id: 'ABC:1' };
+test('front matter: attach, replace and clear the Gantt link', () => {
+  const info = { block: 'c1|session_teach|1', course: 'QTCL', label: 'Buổi 1', start: '2026-10-17', end: '2026-10-17' };
+  const apply = (v, ed) => v.slice(0, ed.from) + ed.text + v.slice(ed.to);
   let v = 'hello';
-  let ed = E.setEvent(v, 0, 0, ev);
-  v = v.slice(0, ed.from) + ed.text + v.slice(ed.to);
-  assert.strictEqual(v, '---\nevent: Team sync\nevent-start: 2026-10-14T10:00:00+07:00\nevent-id: ABC:1\n---\n\nhello');
+  let ed = E.setGantt(v, 0, 0, info);
+  v = apply(v, ed);
+  assert.strictEqual(v, '---\ngantt-block: c1|session_teach|1\ngantt-title: QTCL — Buổi 1\ngantt-start: 2026-10-17\ngantt-end: 2026-10-17\n---\n\nhello');
   assert.strictEqual(ed.selStart, v.length - 5);
   const p = E.parseFrontMatter(v);
-  assert.strictEqual(p.meta.event, 'Team sync');
+  assert.strictEqual(p.meta['gantt-block'], 'c1|session_teach|1');
   assert.strictEqual(p.body, '\nhello');
+  // clearing removes the whole block when only Gantt keys were there
+  assert.strictEqual(apply(v, E.clearGantt(v, 0, 0)), '\nhello');
   // replacing keeps other keys
-  v = '---\ntags: a\nevent: Old\nevent-id: X\n---\nbody';
-  ed = E.setEvent(v, 0, 0, ev);
-  v = v.slice(0, ed.from) + ed.text + v.slice(ed.to);
+  v = '---\ntags: a\ngantt-block: old\ngantt-title: Old\n---\nbody';
+  v = apply(v, E.setGantt(v, 0, 0, info));
   assert.ok(v.includes('tags: a') && !v.includes('Old') && v.endsWith('---\nbody'));
+  v = apply(v, E.clearGantt(v, 0, 0));
+  assert.strictEqual(v, '---\ntags: a\n---\nbody');
+  assert.strictEqual(E.clearGantt('plain', 0, 0), null);
 });

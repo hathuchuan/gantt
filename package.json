@@ -14,9 +14,8 @@
   },
   "scripts": {
     "start": "electron .",
-    "test": "node --test test/editing.test.js test/math.test.js",
-    "dist": "npm run build:helper && electron-builder --mac --publish never",
-    "build:helper": "mkdir -p build && swiftc -O native/calendar-helper.swift -o build/calendar-helper -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __info_plist -Xlinker native/Info.plist"
+    "test": "node --test test/editing.test.js test/math.test.js test/gantt.test.js",
+    "dist": "electron-builder --mac --publish never"
   },
   "build": {
     "appId": "com.hathuchuan.mdeditor",
@@ -27,6 +26,7 @@
     "files": [
       "main.js",
       "preload.js",
+      "gantt.js",
       "src/**/*"
     ],
     "mac": {
@@ -44,18 +44,8 @@
           "name": "Markdown",
           "role": "Editor"
         }
-      ],
-      "extendInfo": {
-        "NSCalendarsUsageDescription": "MD Editor links notes to your calendar events.",
-        "NSCalendarsFullAccessUsageDescription": "MD Editor links notes to your calendar events."
-      }
+      ]
     },
-    "extraResources": [
-      {
-        "from": "build/calendar-helper",
-        "to": "calendar-helper"
-      }
-    ],
     "protocols": [
       {
         "name": "MD Editor note",

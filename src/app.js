@@ -31,7 +31,7 @@
     editor.focus();
     editor.setSelectionRange(ed.from, ed.to);
     if (ed.text === '') {
-      if (ed.from !== ed.to) document.execCommand('delete');
+      if (ed.from !== ed.to && !document.execCommand('delete')) editor.setRangeText('', ed.from, ed.to, 'end');
     } else if (!document.execCommand('insertText', false, ed.text)) {
       editor.setRangeText(ed.text, ed.from, ed.to, 'end');
     }
@@ -181,13 +181,12 @@
   }
 
   // ---------- preview / edit ----------
-  function eventChip(meta) {
-    const chip = el('div', 'event-chip', '📅 ' + meta.event);
-    const d = new Date(meta['event-start']);
-    if (!isNaN(d)) {
-      const fmt = { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' };
-      chip.append(' · ' + d.toLocaleString(undefined, fmt));
-    }
+  function ganttChip(meta) {
+    const chip = el('button', 'event-chip', '🗓 ' + (meta['gantt-title'] || meta['gantt-block']));
+    const range = meta['gantt-start'] && meta['gantt-end'] ? (meta['gantt-start'] === meta['gantt-end'] ? meta['gantt-start'] : meta['gantt-start'] + ' → ' + meta['gantt-end']) : '';
+    if (range) chip.append(' · ' + range);
+    chip.title = 'Show in Academic Gantt (⇧⌘G)';
+    chip.addEventListener('click', showInGantt);
     return chip;
   }
 
@@ -201,7 +200,7 @@
         node.textContent = node.dataset.tex;
       }
     });
-    if (fm.meta.event) preview.prepend(eventChip(fm.meta));
+    if (fm.meta['gantt-block']) preview.prepend(ganttChip(fm.meta));
   }
 
   function setMode(next) {
@@ -364,50 +363,68 @@
     });
   }
 
-  // ---------- calendar events ----------
-  const EVENT_ERRORS = {
-    unavailable: 'Calendar integration is only available in the macOS app.',
-    denied: 'Calendar access was denied. Allow MD Editor in System Settings → Privacy & Security → Calendars.',
+  // ---------- Academic Gantt ----------
+  const GANTT_ERRORS = {
+    'no-data': 'No Gantt data found. Open Academic Gantt once so it creates its data folder.',
+    'no-gantt': 'Academic Gantt isn’t installed (or hasn’t been opened yet).',
   };
 
-  function openEventSheet() {
-    let events = [];
+  function ganttBlockOfNote() {
+    const { meta } = E.parseFrontMatter(editor.value);
+    return meta['gantt-block'] ? meta : null;
+  }
+
+  async function showInGantt() {
+    const meta = ganttBlockOfNote();
+    if (!meta) return openGanttSheet();
+    const r = await api.ganttOpen(meta['gantt-block']);
+    if (r.error) toast(GANTT_ERRORS[r.error] || 'Couldn’t open Academic Gantt.');
+  }
+
+  async function unlinkFromGantt() {
+    const meta = ganttBlockOfNote();
+    if (!meta) return toast('This note isn’t linked to a Gantt block.');
+    applyEdit(E.clearGantt(editor.value, editor.selectionStart, editor.selectionEnd));
+    await api.ganttUnlink(meta['gantt-block']);
+    await save(false);
+    toast('Unlinked from Gantt');
+  }
+
+  function openGanttSheet() {
+    let blocks = [];
     let shown = [];
     let index = 0;
     const input = el('input', 'filter');
     input.type = 'text';
-    input.placeholder = 'Filter events…';
+    input.placeholder = 'Filter blocks or courses…';
     const status = el('p', 'note', 'Loading…');
     const list = el('div', 'events');
-
-    const dayFmt = { weekday: 'long', day: 'numeric', month: 'long' };
-    const timeFmt = { hour: '2-digit', minute: '2-digit' };
+    const current = (ganttBlockOfNote() || {})['gantt-block'];
 
     function paint() {
       const q = input.value.trim().toLowerCase();
-      shown = events.filter((e) => !q || e.title.toLowerCase().includes(q) || e.calendar.toLowerCase().includes(q));
+      shown = blocks.filter((b) => !q || b.label.toLowerCase().includes(q) || b.course.toLowerCase().includes(q));
       index = Math.min(index, Math.max(0, shown.length - 1));
       list.replaceChildren();
-      let day = '';
-      shown.forEach((e, i) => {
-        const start = new Date(e.start);
-        const label = start.toLocaleDateString(undefined, dayFmt);
-        if (label !== day) {
-          day = label;
-          list.append(el('div', 'cmd-group', label));
+      let course = null;
+      shown.forEach((b, i) => {
+        if (b.course !== course) {
+          course = b.course;
+          list.append(el('div', 'cmd-group', course));
         }
         const row = el('div', 'event-row' + (i === index ? ' active' : ''));
-        const when = e.allDay ? 'All day' : start.toLocaleTimeString(undefined, timeFmt);
-        row.append(el('span', 'when', when), el('span', 'label', e.title), el('span', 'key', e.url.startsWith('mdeditor:') ? '📎 ' + e.calendar : e.calendar));
-        row.addEventListener('click', () => attachEvent(e));
+        const when = b.start === b.end ? b.start.slice(5) : b.start.slice(5) + '→' + b.end.slice(5);
+        const mark = b.id === current ? '✓ this note' : b.notePath ? '📄 has note' : '';
+        row.append(el('span', 'when', when), el('span', 'label', b.label), el('span', 'key', mark));
+        row.addEventListener('click', () => attachBlock(b));
         list.append(row);
       });
       list.querySelector('.active')?.scrollIntoView({ block: 'nearest' });
-      if (events.length) status.textContent = shown.length ? '' : 'No matching events.';
+      if (blocks.length) status.textContent = shown.length ? '' : 'No matching blocks.';
     }
 
     const token = openSheet(
-      'Attach to calendar event',
+      'Link to Gantt block',
       (body) => body.append(input, status, list),
       (e) => {
         if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
@@ -416,7 +433,7 @@
           paint();
         } else if (e.key === 'Enter' && shown[index]) {
           e.preventDefault();
-          attachEvent(shown[index]);
+          attachBlock(shown[index]);
         }
       }
     );
@@ -426,28 +443,28 @@
     });
     input.focus();
 
-    api.listEvents().then((r) => {
+    api.ganttBlocks().then((r) => {
       if (sheetToken !== token) return;
       if (r.error) {
-        status.textContent = EVENT_ERRORS[r.error] || 'Couldn’t read the calendar: ' + r.error;
+        status.textContent = GANTT_ERRORS[r.error] || 'Couldn’t read the Gantt data.';
         status.classList.add('error');
         return;
       }
-      events = r.events;
-      status.textContent = events.length ? '' : 'No events between last week and the next three weeks.';
+      blocks = r.blocks;
+      status.textContent = blocks.length ? '' : 'No blocks found (recent or upcoming).';
       paint();
     });
   }
 
-  // Links the note to the event (event gets a mdeditor:// link, note gets front matter).
-  async function attachEvent(ev) {
+  // Links this note to a Gantt block: the note gets front matter, Gantt stores the note's path.
+  async function attachBlock(b) {
     closeSheet();
-    if (!(await save(false))) return; // the link needs a file path
-    const r = await api.linkEvent({ id: ev.id, start: ev.start, file: docPath });
-    if (r.error) return toast(EVENT_ERRORS[r.error] || 'Couldn’t update the event: ' + r.error);
-    applyEdit(E.setEvent(editor.value, editor.selectionStart, editor.selectionEnd, ev));
+    if (!(await save(false))) return; // Gantt needs the file path
+    const r = await api.ganttLink({ block: b.id, file: docPath });
+    if (r.error) return toast(GANTT_ERRORS[r.error] || 'Couldn’t update Academic Gantt.');
+    applyEdit(E.setGantt(editor.value, editor.selectionStart, editor.selectionEnd, { block: b.id, course: b.course, label: b.label, start: b.start, end: b.end }));
     await save(false);
-    toast('Attached to “' + ev.title + '”');
+    toast('Linked to “' + b.label + '”');
   }
 
   // ---------- theme ----------
@@ -504,7 +521,9 @@
     toggle: () => setMode(mode === 'edit' ? 'preview' : 'edit'),
     night: () => setNight(!isNight()),
     commands: openCommandsSheet,
-    event: openEventSheet,
+    gantt: openGanttSheet,
+    'gantt-open': showInGantt,
+    'gantt-unlink': unlinkFromGantt,
     save: () => save(false),
     'save-as': () => save(true),
     new: async () => {

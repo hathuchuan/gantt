@@ -173,7 +173,8 @@
 
     it('Insert', 'date', 'Today’s date', '📅', '{date}'),
     it('Insert', 'time', 'Current time', '🕒', '{time}'),
-    it('Insert', 'event', 'Attach to calendar event', '📎', null, { action: 'event' }),
+    it('Insert', 'gantt', 'Link to Gantt block', '🗓', null, { action: 'gantt' }),
+    it('Insert', 'ganttopen', 'Show in Gantt', '↗', null, { action: 'gantt-open' }),
 
     it('Math', 'math', 'Inline math', '$', '${cursor}$'),
     it('Math', 'mathblock', 'Math block', '$$', '$$\n{cursor}\n$$', BLOCK),
@@ -270,9 +271,9 @@
     return edit(from, s, text, from + a, from + b);
   }
 
-  // ---------- calendar event front matter ----------
+  // ---------- Academic Gantt link (front matter) ----------
   const FM_RE = /^---\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/;
-  const EVENT_KEYS = /^(event|event-start|event-id):/;
+  const GANTT_KEYS = /^gantt-(block|title|start|end):/;
 
   function parseFrontMatter(v) {
     const m = FM_RE.exec(v);
@@ -286,13 +287,26 @@
     return { meta, body: v.slice(m[0].length), length: m[0].length, lines };
   }
 
-  // Attach (or replace) the calendar event in the document's front matter.
-  function setEvent(v, s, e, ev) {
+  const one = (x) => String(x == null ? '' : x).replace(/\s*\n\s*/g, ' ').trim();
+
+  // Attach (or replace) the Gantt block link in the document's front matter.
+  function setGantt(v, s, e, info) {
     const fm = parseFrontMatter(v);
-    const clean = (x) => String(x).replace(/\s*\n\s*/g, ' ').trim();
-    const lines = [`event: ${clean(ev.title)}`, `event-start: ${clean(ev.start)}`, `event-id: ${clean(ev.id)}`]
-      .concat(fm.lines.filter((l) => !EVENT_KEYS.test(l)));
-    const text = `---\n${lines.join('\n')}\n---\n` + (fm.length ? '' : '\n');
+    const lines = [`gantt-block: ${one(info.block)}`, `gantt-title: ${one(info.course)} — ${one(info.label)}`];
+    if (info.start) lines.push(`gantt-start: ${one(info.start)}`);
+    if (info.end) lines.push(`gantt-end: ${one(info.end)}`);
+    const text = `---\n${lines.concat(fm.lines.filter((l) => !GANTT_KEYS.test(l))).join('\n')}\n---\n` + (fm.length ? '' : '\n');
+    const delta = text.length - fm.length;
+    return edit(0, fm.length, text, Math.max(text.length, s + delta), Math.max(text.length, e + delta));
+  }
+
+  // Remove the Gantt keys (and the whole front matter block when nothing else is left).
+  function clearGantt(v, s, e) {
+    const fm = parseFrontMatter(v);
+    if (!fm.length) return null;
+    const rest = fm.lines.filter((l) => !GANTT_KEYS.test(l) && l.trim() !== '');
+    if (rest.length === fm.lines.filter((l) => l.trim() !== '').length) return null;
+    const text = rest.length ? `---\n${rest.join('\n')}\n---\n` : '';
     const delta = text.length - fm.length;
     return edit(0, fm.length, text, Math.max(text.length, s + delta), Math.max(text.length, e + delta));
   }
@@ -300,6 +314,6 @@
   return {
     onEnter, onTab, wrap, link, pasteUrl, autoPair, onBackspace, heading,
     slashQuery, filterSlash, applySlash, buildItems, SLASH_ITEMS,
-    parseFrontMatter, setEvent,
+    parseFrontMatter, setGantt, clearGantt,
   };
 });

@@ -4,7 +4,6 @@ Trình soạn thảo Markdown tối giản cho macOS.
 
 ```
 npm install
-npm run build:helper   # macOS: biên dịch helper Calendar (cần Xcode command line tools)
 npm start
 npm run dist           # đóng gói .dmg (chạy trên macOS)
 npm test
@@ -34,5 +33,10 @@ npm test
 ## Math (LaTeX)
 `$E=mc^2$` (inline) và `$$ … $$` (block) được render bằng KaTeX trong Preview.
 
-## Gắn note vào sự kiện Calendar
-`⇧⌘E` hoặc `/event`: chọn một sự kiện → note được lưu, sự kiện trong Calendar nhận link `mdeditor://…` (bấm để mở lại note), và note có front matter `event:` hiển thị ở Preview. Lần đầu macOS sẽ hỏi quyền truy cập Calendar.
+## Liên kết 2 chiều với Academic Gantt
+Cần cài app [Academic Gantt](https://github.com/hathuchuan/gantt) (bản có nhánh `claude/gantt-note-links` trở lên) và mở nó ít nhất một lần.
+
+- **Gantt → note:** ⌘-nhấp một khối trên Gantt (hoặc nhấp biểu tượng 📄) → mở note của khối; chưa có thì note mới được tạo trong `~/Documents/Gantt Notes/<dự án>/<khối>.md` và liên kết tự được gửi về Gantt.
+- **Note → Gantt:** `⇧⌘G` (hoặc `/ganttopen`, hoặc bấm nhãn 🗓 ở Preview) → Gantt hiện ra, cuộn tới khối và nhấp nháy.
+- **Gắn note có sẵn vào khối:** `⇧⌘E` hoặc `/gantt` → chọn khối (lọc theo tên); note được lưu và có front matter `gantt-block:`. *File → Unlink from Gantt* để gỡ.
+- Đổi thư mục note: tạo `settings.json` trong `~/Library/Application Support/MD Editor/` với `{ "notesDir": "~/Notes/Gantt" }`.
