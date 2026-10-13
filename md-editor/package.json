@@ -1,0 +1,58 @@
+{
+  "name": "md-editor",
+  "version": "1.0.0",
+  "description": "Minimal Markdown editor for macOS",
+  "main": "main.js",
+  "private": true,
+  "license": "MIT",
+  "devDependencies": {
+    "dompurify": "^3.4.17",
+    "electron": "^44.7.0",
+    "electron-builder": "^26.15.3",
+    "katex": "^0.19.0",
+    "marked": "^18.1.1"
+  },
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test test/editing.test.js test/math.test.js test/gantt.test.js",
+    "dist": "electron-builder --mac --publish never"
+  },
+  "build": {
+    "appId": "com.hathuchuan.mdeditor",
+    "productName": "MD Editor",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "gantt.js",
+      "src/**/*"
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "fileAssociations": [
+        {
+          "ext": [
+            "md",
+            "markdown"
+          ],
+          "name": "Markdown",
+          "role": "Editor"
+        }
+      ]
+    },
+    "protocols": [
+      {
+        "name": "MD Editor note",
+        "schemes": [
+          "mdeditor"
+        ]
+      }
+    ]
+  }
+}
