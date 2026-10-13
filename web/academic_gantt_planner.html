@@ -4,6 +4,17 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Academic Modular Gantt Planner</title>
+  <script>
+    // Áp dụng giao diện sáng/tối trước khi vẽ trang để không bị nháy màu.
+    (function () {
+      try {
+        var boot = window.GanttNative && window.GanttNative.bootState;
+        var t = (boot && boot.academic_smart_gantt_theme) || localStorage.getItem('academic_smart_gantt_theme');
+        if (t !== 'dark' && t !== 'light') t = (window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+        document.documentElement.setAttribute('data-theme', t);
+      } catch (e) {}
+    })();
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -57,6 +68,19 @@
       --cat-tv-border: #fdba74;
 
       --c-eval: #d97706;
+
+      /* Cột hôm nay (hồng nhạt, trong suốt) */
+      --today-bg: rgba(244, 114, 182, 0.20);
+      --today-text: #be185d;
+
+      /* Lớp đang giảng hôm nay / lớp đang trong kỳ giảng dạy (cột trái) */
+      --teach-today: #16a34a;
+      --teach-today-bg: #dcfce7;
+      --teach-today-hover: #bbf7d0;
+      --teach-term: #0ea5e9;
+      --teach-term-bg: #e0f2fe;
+      --teach-term-hover: #bae6fd;
+      --completed-text: #991b1b;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -648,7 +672,7 @@
       border-right: 1.5px solid #94a3b8;
     }
     .day-header-cell.weekend { background-color: #e2e8f0; color: #64748b; }
-    .day-header-cell.today { background-color: #fee2e2; color: #b91c1c; font-weight: 700; }
+    .day-header-cell.today { background-color: var(--today-bg); color: var(--today-text); font-weight: 700; }
     .day-header-cell .day-num { font-size: 11px; font-weight: 700; line-height: 1.1; }
     .day-header-cell .day-name { font-size: 9px; }
     /* Ngày đang xem trong ô Tải công việc */
@@ -736,14 +760,13 @@
       z-index: 2;
     }
 
-    /* ĐƯỜNG KẺ ĐỎ HÔM NAY */
+    /* CỘT HÔM NAY: tô hồng nhạt trong suốt (nằm dưới các thanh Gantt) */
     .today-line {
       position: absolute;
       top: 0;
       bottom: 0;
-      width: 2px;
-      background: var(--danger);
-      z-index: 16;
+      background: var(--today-bg);
+      z-index: 1;
       pointer-events: none;
     }
 
@@ -1059,6 +1082,222 @@
       white-space: pre-wrap;
       word-break: break-word;
     }
+
+    /* ===== LỚP ĐANG GIẢNG HÔM NAY / ĐANG TRONG KỲ GIẢNG DẠY (cột trái) ===== */
+    .gantt-fixed-sidebar .gantt-row-wrapper.row-teach-today {
+      background-color: var(--teach-today-bg) !important;
+      box-shadow: inset 5px 0 0 var(--teach-today);
+    }
+    .gantt-fixed-sidebar .gantt-row-wrapper.row-teach-today:hover { background-color: var(--teach-today-hover) !important; }
+    .gantt-fixed-sidebar .gantt-row-wrapper.row-teach-term {
+      background-color: var(--teach-term-bg) !important;
+      box-shadow: inset 5px 0 0 var(--teach-term);
+    }
+    .gantt-fixed-sidebar .gantt-row-wrapper.row-teach-term:hover { background-color: var(--teach-term-hover) !important; }
+    .teach-tag {
+      display: inline-block; font-size: 9px; font-weight: 700; line-height: 14px; padding: 0 6px;
+      border-radius: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 190px;
+    }
+    .teach-tag-today { background: var(--teach-today); color: #fff; }
+    .teach-tag-term { background: transparent; color: var(--teach-term); border: 1px solid var(--teach-term); line-height: 12px; }
+
+    /* ===== CÔNG VIỆC THEO TUẦN / THÁNG ===== */
+    .period-panel { border-bottom: 1px solid var(--border-light); background: var(--bg-card); }
+    .period-head {
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 16px;
+      border-bottom: 1px dashed var(--border-light);
+    }
+    .period-head .period-title { font-size: 13px; }
+    .period-head .period-summary { font-size: 11px; color: var(--text-muted); margin-left: auto; }
+    .period-body { max-height: 320px; overflow-y: auto; padding: 8px 16px 12px; }
+    .period-day { margin-top: 8px; }
+    .period-day-head {
+      display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700;
+      color: var(--text-muted); text-transform: uppercase; letter-spacing: .3px; margin-bottom: 4px;
+    }
+    .period-day.is-today .period-day-head { color: var(--today-text); }
+    .period-today-badge { background: var(--today-bg); color: var(--today-text); border-radius: 4px; padding: 0 6px; font-size: 10px; }
+    .period-row {
+      display: flex; align-items: center; gap: 8px; padding: 4px 8px; border-radius: 6px; font-size: 12px;
+      border: 1px solid transparent; cursor: pointer;
+    }
+    .period-row:hover { background: var(--row-hover-bg); border-color: var(--border-light); }
+    .period-row .pr-check {
+      width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid var(--border); background: transparent;
+      color: transparent; font-size: 10px; line-height: 15px; cursor: pointer; flex-shrink: 0; padding: 0;
+    }
+    .period-row.is-done .pr-check { background: #dc2626; border-color: #dc2626; color: #fff; }
+    .period-row.is-done .pr-main { text-decoration: line-through; opacity: .65; }
+    .period-row .pr-main { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .period-row .pr-dates { font-size: 11px; color: var(--text-muted); white-space: nowrap; flex-shrink: 0; }
+    .period-row .pr-stage {
+      font-size: 10px; font-weight: 700; line-height: 15px; padding: 0 6px; border-radius: 8px;
+      border: 1px solid currentColor; flex-shrink: 0;
+    }
+    .period-row.st-macro .pr-stage { color: #6d28d9; }
+    .period-row.st-prep .pr-stage { color: #c2410c; }
+    .period-row.st-teach .pr-stage { color: #1d4ed8; }
+    .period-row.st-eval .pr-stage { color: #047857; }
+    .period-row.st-submit .pr-stage { color: #be185d; }
+    .period-row.st-deliv .pr-stage { color: #a16207; }
+    .period-empty { font-size: 12px; color: var(--text-muted); padding: 12px 0; }
+
+    /* ===== MENU CHUỘT PHẢI ===== */
+    .ctx-menu {
+      position: fixed; display: none; z-index: 2000; min-width: 220px; max-width: 320px; padding: 4px;
+      background: var(--bg-card); color: var(--text); border: 1px solid var(--border); border-radius: 9px;
+      box-shadow: 0 10px 28px rgba(15, 23, 42, 0.28); font-size: 12px;
+    }
+    .ctx-title {
+      padding: 5px 9px 4px; font-size: 10px; font-weight: 700; color: var(--text-muted);
+      text-transform: uppercase; letter-spacing: .3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .ctx-item {
+      display: block; width: 100%; text-align: left; background: none; border: none; color: inherit;
+      font: inherit; padding: 6px 9px; border-radius: 6px; cursor: pointer; white-space: nowrap;
+    }
+    .ctx-item:hover:not(:disabled) { background: var(--primary); color: #fff; }
+    .ctx-item:disabled { opacity: .45; cursor: default; }
+    .ctx-item.danger { color: var(--danger); }
+    .ctx-item.danger:hover:not(:disabled) { background: var(--danger); color: #fff; }
+    .ctx-sep { height: 1px; background: var(--border-light); margin: 4px 2px; }
+
+    /* ===== NÚT GIAO DIỆN / TỰ ĐỘNG CẬP NHẬT ===== */
+    .auto-sync-status { font-size: 12px; color: var(--text-muted); white-space: nowrap; padding: 0 4px; cursor: pointer; }
+    .auto-sync-status.bad { color: #b91c1c; }
+    .auto-sync-row { display: flex; align-items: center; gap: 6px; font-size: 12px; margin: 8px 0; cursor: pointer; }
+
+    /* ===== DARK MODE ===== */
+    :root[data-theme="dark"] {
+      color-scheme: dark;
+      --bg-body: #0b1220; --bg-card: #111a2e; --border: #334155; --border-light: #243049;
+      --text: #e2e8f0; --text-muted: #94a3b8; --primary: #3b82f6; --primary-hover: #60a5fa;
+      --danger: #f87171; --success: #34d399;
+      --row-even-bg: #111a2e; --row-odd-bg: #15213a; --row-hover-bg: #1e3357;
+      --row-completed-bg: #3b1620; --row-completed-hover: #4c1d2a; --row-completed-border: #f87171;
+      --cat-mba-bg: #2e1f5a; --cat-mba-text: #ddd6fe; --cat-mba-border: #6d28d9;
+      --cat-dh-bg: #0c2a40; --cat-dh-text: #7dd3fc; --cat-dh-border: #0369a1;
+      --cat-dn-bg: #0b3a2c; --cat-dn-text: #6ee7b7; --cat-dn-border: #047857;
+      --cat-nc-bg: #4a1535; --cat-nc-text: #f9a8d4; --cat-nc-border: #be185d;
+      --cat-tv-bg: #44210c; --cat-tv-text: #fdba74; --cat-tv-border: #c2410c;
+      --today-bg: rgba(244, 114, 182, 0.22); --today-text: #f9a8d4;
+      --teach-today: #22c55e; --teach-today-bg: #0f3a25; --teach-today-hover: #14532d;
+      --teach-term: #38bdf8; --teach-term-bg: #0c2d44; --teach-term-hover: #0f3d5c;
+      --completed-text: #fca5a5;
+    }
+    [data-theme="dark"] [style*="color:#b91c1c"],
+    [data-theme="dark"] [style*="color:#991b1b"] { color: #fca5a5 !important; }
+    [data-theme="dark"] [style*="color:#be185d"] { color: #f9a8d4 !important; }
+    [data-theme="dark"] [style*="color:#1d4ed8"],
+    [data-theme="dark"] [style*="color:#0369a1"] { color: #93c5fd !important; }
+    [data-theme="dark"] [style*="color:#5b21b6"] { color: #c4b5fd !important; }
+    [data-theme="dark"] [style*="color:#334155"] { color: #cbd5e1 !important; }
+    [data-theme="dark"] [style*="color:#0f172a"] { color: var(--text) !important; }
+    [data-theme="dark"] .bar-prep-dh,
+    [data-theme="dark"] .bar-prep-dn { color: #0f172a !important; }
+    [data-theme="dark"] .header-title h1 { color: var(--text); }
+    [data-theme="dark"] .save-status.ok { color: #34d399; }
+    [data-theme="dark"] .btn-secondary { background: #1b2740; color: var(--text); border-color: var(--border); }
+    [data-theme="dark"] .btn-secondary:hover { background: #26355a; }
+    [data-theme="dark"] .btn-danger { background: #4c1d24; color: #fca5a5; border-color: #7f1d1d; }
+    [data-theme="dark"] .btn-danger:hover { background: #5f2530; }
+    [data-theme="dark"] .alert-box { background: var(--bg-card); }
+    [data-theme="dark"] .alert-box.normal { background: #0f1a2e; }
+    [data-theme="dark"] .alert-box.danger { background: #2a1218; }
+    [data-theme="dark"] .alert-box.normal .alert-title { color: #86efac; }
+    [data-theme="dark"] .alert-box.danger .alert-title { color: #fca5a5; }
+    [data-theme="dark"] .alert-date-badge.is-other-day { color: #93c5fd; }
+    [data-theme="dark"] .alert-today-btn { background: #172554; color: #93c5fd; border-color: #1e40af; }
+    [data-theme="dark"] .alert-today-btn:hover { background: #1e3a8a; }
+    [data-theme="dark"] .stat-pill { background: #1b2740; }
+    [data-theme="dark"] .stat-pill-num { color: var(--text); }
+    [data-theme="dark"] .congestion-list { color: #fca5a5; }
+    [data-theme="dark"] .alert-box.normal .congestion-list { color: #cbd5e1; border-top-color: #334155; }
+    [data-theme="dark"] .countdown-sidebar-card { background: var(--bg-card); }
+    [data-theme="dark"] .countdown-item { background: #15213a; }
+    [data-theme="dark"] .countdown-item.is-completed-item { background: #3b1620; border-color: #7f1d1d; }
+    [data-theme="dark"] .countdown-badge.research { background: #4a1535; color: #f9a8d4; border-color: #be185d; }
+    [data-theme="dark"] .countdown-badge.consulting { background: #44210c; color: #fdba74; border-color: #c2410c; }
+    [data-theme="dark"] .countdown-badge.review { background: #3a2c0b; color: #fcd34d; border-color: #92400e; }
+    [data-theme="dark"] .countdown-badge.rejected { background: #1b2740; color: #cbd5e1; border-color: #475569; }
+    [data-theme="dark"] .workload-list li.wl-macro { color: #c4b5fd; }
+    [data-theme="dark"] .workload-list li.wl-prep { color: #fdba74; }
+    [data-theme="dark"] .workload-list li.wl-teach { color: #93c5fd; }
+    [data-theme="dark"] .workload-list li.wl-eval { color: #6ee7b7; }
+    [data-theme="dark"] .workload-list li.wl-submit { color: #f9a8d4; }
+    [data-theme="dark"] .workload-list li.wl-deliv { color: #fde047; }
+    [data-theme="dark"] .overdue-box { background: #2d2410; border-color: #92400e; }
+    [data-theme="dark"] .overdue-box .overdue-title { color: #fbbf24; }
+    [data-theme="dark"] .overdue-late { color: #f87171; }
+    [data-theme="dark"] .nav-tab:hover { background: #15213a; }
+    [data-theme="dark"] .form-group label { color: #cbd5e1; }
+    [data-theme="dark"] .form-control { background: #0f1a2e; color: var(--text); }
+    [data-theme="dark"] .slider-container,
+    [data-theme="dark"] .sample-box { background: #15213a; border-color: var(--border); color: var(--text-muted); }
+    [data-theme="dark"] .sample-box:hover { background: #1e3357; color: #93c5fd; }
+    [data-theme="dark"] .special-mode-box.research { background: #3a1229; border-color: #be185d; }
+    [data-theme="dark"] .special-mode-box.consulting { background: #3a1d0b; border-color: #c2410c; }
+    [data-theme="dark"] .gantt-section,
+    [data-theme="dark"] .toolbar,
+    [data-theme="dark"] .gantt-grid-container,
+    [data-theme="dark"] .gantt-fixed-sidebar { background: var(--bg-card); }
+    [data-theme="dark"] .gantt-fixed-sidebar { border-right-color: #475569; box-shadow: 3px 0 8px rgba(0,0,0,0.35); }
+    [data-theme="dark"] .view-toggles { background: #1b2740; }
+    [data-theme="dark"] .view-btn.active { background: #2b3b61; color: var(--text); }
+    [data-theme="dark"] .filter-chip.active-filter { box-shadow: 0 0 0 2px #e2e8f0; }
+    [data-theme="dark"] .cat-tag-all { background: #e2e8f0; color: #0f172a; border-color: #e2e8f0; }
+    [data-theme="dark"] .fixed-header-row { background: #15213a; color: #cbd5e1; border-bottom-color: #475569; }
+    [data-theme="dark"] .gantt-scroll-box { scrollbar-color: #475569 #15213a; }
+    [data-theme="dark"] .gantt-scroll-box::-webkit-scrollbar-track { background: #15213a; }
+    [data-theme="dark"] .gantt-scroll-box::-webkit-scrollbar-thumb { background: #475569; }
+    [data-theme="dark"] .gantt-header-months { background: #15213a; }
+    [data-theme="dark"] .gantt-header-days { background: #111a2e; border-bottom-color: #475569; }
+    [data-theme="dark"] .month-group-cell { color: #e2e8f0; border-right-color: #475569; border-bottom-color: #334155; }
+    [data-theme="dark"] .day-header-cell { border-right-color: #243049; }
+    [data-theme="dark"] .day-header-cell.month-sep { border-right-color: #475569; }
+    [data-theme="dark"] .day-header-cell.weekend { background-color: #1b2740; color: #94a3b8; }
+    [data-theme="dark"] .day-header-cell:hover { background-color: #1e3357 !important; color: #93c5fd; }
+    [data-theme="dark"] .day-header-cell.has-time-conflict { background-color: #3b1620; }
+    [data-theme="dark"] .day-header-cell.today,
+    [data-theme="dark"] .day-header-cell.today.weekend { background-color: var(--today-bg); color: var(--today-text); }
+    [data-theme="dark"] .day-header-cell.workload-focus-day { color: #93c5fd; }
+    [data-theme="dark"] .gantt-row-wrapper { border-bottom-color: #243049; }
+    [data-theme="dark"] .gantt-row-wrapper.row-session { border-bottom-color: #334155; }
+    [data-theme="dark"] .gantt-row-wrapper.row-completed { border-bottom-color: #7f1d1d; }
+    [data-theme="dark"] .grid-day-col { border-right-color: rgba(71, 85, 105, 0.5); }
+    [data-theme="dark"] .grid-day-col.weekend { background-color: rgba(148, 163, 184, 0.08); }
+    [data-theme="dark"] .grid-day-col.month-sep { border-right-color: #475569; }
+    [data-theme="dark"] .grid-day-col.workload-focus-col { background-color: rgba(96, 165, 250, 0.16); }
+    [data-theme="dark"] .day-inspector-popup { background: #111a2e; border-color: #334155; }
+    [data-theme="dark"] .day-inspector-header { background: #1e293b; }
+    [data-theme="dark"] .day-summary-pill,
+    [data-theme="dark"] .day-item-card { background: #15213a; border-color: #243049; }
+    [data-theme="dark"] .day-summary-pill .num { color: var(--text); }
+    [data-theme="dark"] .day-item-card:hover { background: #1e3357; border-color: #3b82f6; }
+    [data-theme="dark"] .day-conflict-banner { background: #3b1620; border-color: #ef4444; color: #fca5a5; }
+    [data-theme="dark"] .day-item-card.conflict-card { background: #3b1620; border-color: #7f1d1d; border-left-color: #ef4444; }
+    [data-theme="dark"] .day-section-heading { color: #94a3b8; }
+    [data-theme="dark"] .modal-backdrop { background: rgba(0, 0, 0, 0.55); }
+    [data-theme="dark"] .modal-box { background: var(--bg-card); }
+    [data-theme="dark"] .modal-section { background: #15213a; }
+    [data-theme="dark"] .modal-section-title { color: #e2e8f0; }
+    [data-theme="dark"] .stage-edit-row,
+    [data-theme="dark"] .sub-research-edit-row,
+    [data-theme="dark"] .sub-consulting-edit-row { border-bottom-color: #243049; }
+    [data-theme="dark"] .id-badge-info { background: #243049; color: #cbd5e1; }
+    [data-theme="dark"] [style*="background:#eff6ff"] { background: #0f2347 !important; border-color: #1e40af !important; }
+    [data-theme="dark"] [style*="background:#fdf2f8"] { background: #3a1229 !important; }
+    [data-theme="dark"] [style*="background:#fff7ed"] { background: #3a1d0b !important; }
+    [data-theme="dark"] [style*="background:#f8fafc"],
+    [data-theme="dark"] [style*="background:#fff;"],
+    [data-theme="dark"] [style*="background:#ffffff"] { background: #15213a !important; }
+    [data-theme="dark"] [style*="color:#1e40af"] { color: #93c5fd !important; }
+    [data-theme="dark"] [style*="color:#9d174d"] { color: #f9a8d4 !important; }
+    [data-theme="dark"] [style*="color:#c2410c"] { color: #fdba74 !important; }
+    [data-theme="dark"] [style*="color:#475569"],
+    [data-theme="dark"] [style*="color:#64748b"] { color: #94a3b8 !important; }
+    [data-theme="dark"] [style*="color:#059669"] { color: #34d399 !important; }
+    [data-theme="dark"] .tooltip { background: #1e293b; border-color: #475569; }
   </style>
 </head>
 <body>
@@ -1070,6 +1309,8 @@
     </div>
     <div class="header-actions">
       <span id="saveStatus" class="save-status" style="display:none;"></span>
+      <span id="macAutoStatus" class="auto-sync-status" style="display:none;" onclick="runMacAutoSync(true)" title="Bấm để cập nhật từ Apple Calendar ngay"></span>
+      <button type="button" class="btn btn-secondary" id="btnTheme" onclick="toggleTheme()" title="Chuyển giao diện Sáng / Tối">🌙 Tối</button>
       <button type="button" class="btn btn-secondary" id="btnBlockedRegistry" onclick="clearDeletedBlocklist()" title="Bấm để xem hoặc gỡ danh sách chặn các dự án đã xóa khỏi sync-server">
         🚫 Đã chặn xóa (0)
       </button>
@@ -1285,6 +1526,11 @@
                 <button type="button" class="btn btn-secondary btn-sm" onclick="loadMacCalendars()" title="Đọc lại danh sách lịch">↻</button>
               </div>
               <div id="macCalendarList" class="mac-cal-list"></div>
+              <label class="auto-sync-row" title="Cập nhật khi mở ứng dụng, khi quay lại cửa sổ và định kỳ mỗi 5 phút">
+                <input type="checkbox" id="macAutoSyncToggle" onchange="setMacAutoSync(this.checked)">
+                <span>🔁 Tự động cập nhật từ Apple Calendar</span>
+              </label>
+              <div class="mac-cal-empty" id="macAutoSyncHint"></div>
             </div>
             <button type="button" class="btn btn-primary" style="width: 100%;" onclick="syncFromMacCalendar()">🔄 Kéo Lịch Từ Apple Calendar</button>
           </div>
@@ -1341,6 +1587,11 @@
 
           <button type="button" class="btn btn-secondary btn-sm" onclick="scrollToToday(); resetWorkloadFocusToToday();">📍 Về Hôm Nay</button>
 
+          <div class="view-toggles" title="Danh sách công việc (kèm ngày) trong tuần / tháng">
+            <button type="button" class="view-btn" id="btnPeriodWeek" onclick="setPeriodView('week')">📋 Tuần</button>
+            <button type="button" class="view-btn" id="btnPeriodMonth" onclick="setPeriodView('month')">📋 Tháng</button>
+          </div>
+
           <div class="view-toggles">
             <button type="button" class="view-btn" id="btnZoom24" onclick="setDayWidth(24)">Nhỏ</button>
             <button type="button" class="view-btn active" id="btnZoom32" onclick="setDayWidth(32)">Vừa</button>
@@ -1365,6 +1616,19 @@
             <button type="button" class="view-btn" id="btnExpandView" onclick="setViewMode('expanded')">Tách từng buổi</button>
           </div>
         </div>
+      </div>
+
+      <!-- CÔNG VIỆC TRONG TUẦN / THÁNG (kèm ngày) -->
+      <div class="period-panel" id="periodPanel" style="display:none;">
+        <div class="period-head">
+          <button type="button" class="btn btn-secondary btn-sm" onclick="shiftPeriod(-1)" title="Kỳ trước">‹</button>
+          <strong class="period-title" id="periodTitle"></strong>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="shiftPeriod(1)" title="Kỳ sau">›</button>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="periodToToday()">Hôm nay</button>
+          <span class="period-summary" id="periodSummary"></span>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="setPeriodView(null)" title="Đóng danh sách">✕</button>
+        </div>
+        <div class="period-body" id="periodBody"></div>
       </div>
 
       <div class="gantt-grid-container">
@@ -1407,7 +1671,10 @@
         <h3 id="modalCourseTitle" style="font-size:16px;">Chỉnh sửa dự án</h3>
         <div class="id-badge-info" id="modalSyncIdBadge">ID: ...</div>
       </div>
-      <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal()">✕ Đóng</button>
+      <div style="display:flex; gap:6px; align-items:flex-start;">
+        <button type="button" class="btn btn-secondary btn-sm" id="btnCourseNote" onclick="openCourseNote()" title="Mở / tạo ghi chú Markdown của dự án trong MD Editor">📝 Thêm ghi chú</button>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal()">✕ Đóng</button>
+      </div>
     </div>
 
     <!-- 1. Thông tin chung -->
@@ -1621,6 +1888,7 @@
 </div>
 
 <div class="tooltip" id="tooltip"></div>
+<div class="ctx-menu" id="ctxMenu" role="menu"></div>
 
 <script>
   // =========================================================================
@@ -2855,6 +3123,10 @@
   function markEntireCourseCompletedFromModal() {
     var c = courses.find(function(item) { return item.id === activeCourseId; });
     if (!c) return;
+    toggleCourseCompleted(c);
+  }
+
+  function toggleCourseCompleted(c) {
     var currentlyAllDone = isCourseFullyCompleted(c);
     var targetState = !currentlyAllDone;
 
@@ -2874,7 +3146,7 @@
       if (c.evaluation) c.evaluation.done = targetState;
     }
 
-    populateModalBodyForCourse(c);
+    if (activeCourseId === c.id) populateModalBodyForCourse(c);
     saveData();
     renderGantt();
   }
@@ -3515,6 +3787,7 @@
     try {
       writeStored(MAC_CAL_STORAGE_KEY, JSON.stringify(getSelectedMacCalendarIds()));
     } catch (e) {}
+    if (typeof updateMacAutoUI === 'function') updateMacAutoUI();
   }
 
   function getSelectedMacCalendarIds() {
@@ -3616,6 +3889,7 @@
   async function syncFromMacCalendar() {
     var rawEvents = await fetchMacCalendarEvents();
     if (rawEvents === null) return;
+    if (hasNativeCalendar()) saveMacCalendarSelection();
     if (!rawEvents || rawEvents.length === 0) {
       alert('Không tìm thấy sự kiện nào từ hôm nay trên Apple Calendar.');
       return;
@@ -3636,7 +3910,7 @@
     }
   }
 
-  function groupAndCreateCourses(rawEvents, hasEval, macroDays, isFromSyncServer) {
+  function groupAndCreateCourses(rawEvents, hasEval, macroDays, isFromSyncServer, quiet) {
     var groups = {};
     rawEvents.forEach(function(ev) {
       var parsed = splitCourseAndSession(ev.title);
@@ -3656,6 +3930,7 @@
     var addedCount = 0;
     var updatedCount = 0;
     var blockedCount = 0;
+    var changedCount = 0;
 
     groupNames.forEach(function(cName) {
       var sList = groups[cName];
@@ -3694,6 +3969,7 @@
             var durH = clampDuration(newSess.durationHours, existing.durationHours || commonLT.durationHours || 3);
 
             if (!existingByDate[newSess.teachDate]) {
+              changedCount++;
               existing.sessions.push({
                 num: existing.sessions.length + 1,
                 teachDate: newSess.teachDate,
@@ -3709,12 +3985,15 @@
               });
             } else {
               var curS = existingByDate[newSess.teachDate];
-              if (newSess.location && !curS.locationCustom && curS.locationType === "Mỹ Đình") {
+              if (newSess.location && !curS.locationCustom && curS.locationType === "Mỹ Đình" &&
+                  (curS.locationType !== locParsed.locationType || locParsed.locationCustom)) {
                 curS.locationType = locParsed.locationType;
                 curS.locationCustom = locParsed.locationCustom;
+                changedCount++;
               }
-              if (newSess.startTime && curS.startTime === "18:00") {
+              if (newSess.startTime && curS.startTime === "18:00" && newSess.startTime !== "18:00") {
                 curS.startTime = newSess.startTime;
+                changedCount++;
               }
             }
           });
@@ -3726,12 +4005,15 @@
       } else {
         createCourseFromSessions(cName, sList, hasEval, macroDays, sId, sKey);
         addedCount++;
+        changedCount++;
       }
     });
 
-    saveData();
-    renderGantt();
-    return { added: addedCount, updated: updatedCount, blocked: blockedCount };
+    if (!quiet || changedCount > 0) {
+      saveData();
+      renderGantt();
+    }
+    return { added: addedCount, updated: updatedCount, blocked: blockedCount, changed: changedCount };
   }
 
   function createCourseFromSessions(courseName, rawSessions, hasEval, macroDays, forcedId, forcedSyncKey) {
@@ -4000,11 +4282,14 @@
           '<span class="day-num">' + dt + '</span>' +
           '<span class="day-name">' + dayNameStr + '</span>';
 
-        (function(cDateStr, cDayName) {
-          dayCell.addEventListener('click', function(ev) {
+        (function(cDateStr, cDayName, cCell) {
+          cCell.addEventListener('click', function(ev) {
             openDayInspectorPopup(cDateStr, cDayName, ev);
           });
-        })(curDateStr, dayNameStr);
+          cCell.addEventListener('contextmenu', function(ev) {
+            showContextMenu(ev, cDayName + ' ' + formatVNDate(cDateStr), buildDayMenuItems(cDateStr, null, cCell));
+          });
+        })(curDateStr, dayNameStr, dayCell);
 
         daysRow.appendChild(dayCell);
       }
@@ -4105,9 +4390,23 @@
           ? '<span class="cat-tag-completed">✓ Đã hoàn thành</span>'
           : '';
 
+        // Lớp đang giảng hôm nay (đậm) / đang trong kỳ giảng dạy (nhạt)
+        var teachStatus = isCompleted ? null : getTeachingStatus(c, todayStr);
+        var teachTagHtml = '';
+        if (teachStatus && teachStatus.state === 'today') {
+          var firstToday = teachStatus.sessions[0];
+          teachTagHtml = '<span class="teach-tag teach-tag-today" title="Hôm nay có buổi giảng của lớp này">🎓 Giảng hôm nay · ' +
+            escapeHtml(formatTimeRange(firstToday.startTime || c.startTime, firstToday.durationHours || c.durationHours)) +
+            (teachStatus.sessions.length > 1 ? ' (+' + (teachStatus.sessions.length - 1) + ')' : '') + '</span>';
+        } else if (teachStatus) {
+          teachTagHtml = '<span class="teach-tag teach-tag-term" title="Hôm nay nằm trong kỳ giảng dạy (' + formatVNDate(teachStatus.first) + ' → ' + formatVNDate(teachStatus.last) + '), không có buổi giảng">📚 Trong kỳ · ' +
+            teachStatus.done + '/' + teachStatus.total + ' buổi</span>';
+        }
+
         // Sidebar Row (Trái)
         var sidebarRow = document.createElement('div');
-        sidebarRow.className = 'gantt-row-wrapper ' + stripeClass;
+        sidebarRow.className = 'gantt-row-wrapper ' + stripeClass + (teachStatus ? ' row-teach-' + teachStatus.state : '');
+        sidebarRow.setAttribute('data-course-id', c.id);
         sidebarRow.style.height = rowPixelHeight + 'px';
         sidebarRow.style.minHeight = rowPixelHeight + 'px';
         var labelCell = document.createElement('div');
@@ -4117,8 +4416,9 @@
             '<div style="display:flex; align-items:center; gap:5px; margin-bottom:2px;">' +
               '<span class="cat-tag ' + catTagClass + '" style="font-size:9px; padding:1px 5px;">' + escapeHtml(c.category || 'Dự án') + '</span>' +
               completedTagHtml +
+              teachTagHtml +
             '</div>' +
-            '<strong style="font-size:12px; color:' + (isCompleted ? '#991b1b' : '#0f172a') + ';" title="' + escapeHtml(c.name) + '">' + escapeHtml(c.name) + '</strong>' +
+            '<strong style="font-size:12px; color:' + (isCompleted ? 'var(--completed-text)' : 'var(--text)') + ';" title="' + escapeHtml(c.name) + '">' + escapeHtml(c.name) + '</strong>' +
             '<div style="font-size:10px; color:var(--text-muted);">' + subInfo + '</div>' +
           '</div>';
 
@@ -4139,7 +4439,7 @@
         timelineRow.style.minWidth = totalTimelineWidth + 'px';
         timelineRow.style.height = rowPixelHeight + 'px';
         timelineRow.style.minHeight = rowPixelHeight + 'px';
-        var canvas = createDayTimelineCanvas(totalTimelineWidth, startDate, totalDays);
+        var canvas = createDayTimelineCanvas(totalTimelineWidth, startDate, totalDays, c.id);
 
         var divider = document.createElement('div');
         divider.className = 'lane-divider-line';
@@ -4201,6 +4501,7 @@
               var stLabel = (sub.title || ('Submit lần ' + (subIdx + 1))) + (jText ? (': ' + jText) : '');
               var childSide = document.createElement('div');
               childSide.className = 'gantt-row-wrapper row-session ' + stripeClass;
+              childSide.setAttribute('data-course-id', c.id);
               childSide.innerHTML = '<div class="row-label-cell"><span>↳ ' + (sub.done ? '✅ ' : '') + escapeHtml(stLabel) + (sub.note ? ' 📝' : '') + '</span></div>';
               fixedSidebarList.appendChild(childSide);
 
@@ -4208,7 +4509,7 @@
               childTime.className = 'gantt-row-wrapper row-session ' + stripeClass;
               childTime.style.width = totalTimelineWidth + 'px';
               childTime.style.minWidth = totalTimelineWidth + 'px';
-              var sCanvas = createDayTimelineCanvas(totalTimelineWidth, startDate, totalDays);
+              var sCanvas = createDayTimelineCanvas(totalTimelineWidth, startDate, totalDays, c.id);
               drawDayBar(sCanvas, sub.date, sub.date, startDate, 'bar-nc-submit', stLabel, c.name, !!sub.done, 0, sub.note || '', null, barHandler(c, 'research_submit', subIdx), { noOverdue: !!c.reviewStatus });
               childTime.appendChild(sCanvas);
               timelineList.appendChild(childTime);
@@ -4218,6 +4519,7 @@
               var dLabel = (deliv.title || ('Sản phẩm ' + (dIdx + 1)));
               var childSide = document.createElement('div');
               childSide.className = 'gantt-row-wrapper row-session ' + stripeClass;
+              childSide.setAttribute('data-course-id', c.id);
               childSide.innerHTML = '<div class="row-label-cell"><span>↳ ' + (deliv.done ? '✅ ' : '') + escapeHtml(dLabel) + (deliv.note ? ' 📝' : '') + '</span></div>';
               fixedSidebarList.appendChild(childSide);
 
@@ -4225,7 +4527,7 @@
               childTime.className = 'gantt-row-wrapper row-session ' + stripeClass;
               childTime.style.width = totalTimelineWidth + 'px';
               childTime.style.minWidth = totalTimelineWidth + 'px';
-              var sCanvas = createDayTimelineCanvas(totalTimelineWidth, startDate, totalDays);
+              var sCanvas = createDayTimelineCanvas(totalTimelineWidth, startDate, totalDays, c.id);
               drawDayBar(sCanvas, deliv.date, deliv.date, startDate, 'bar-tv-deadline', dLabel, c.name, !!deliv.done, 0, deliv.note || '', null, barHandler(c, 'consulting_deliverable', dIdx));
               childTime.appendChild(sCanvas);
               timelineList.appendChild(childTime);
@@ -4241,6 +4543,7 @@
 
               var childSide = document.createElement('div');
               childSide.className = 'gantt-row-wrapper row-session ' + stripeClass;
+              childSide.setAttribute('data-course-id', c.id);
               childSide.innerHTML = '<div class="row-label-cell"><span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">↳ ' + escapeHtml(s.title) + ' <span style="color:#64748b; font-size:10px;">(' + escapeHtml(sLocText) + ' • ' + escapeHtml(sTimeText) + ')</span>' + (s.note ? ' 📝' : '') + '</span></div>';
               fixedSidebarList.appendChild(childSide);
 
@@ -4248,7 +4551,7 @@
               childTime.className = 'gantt-row-wrapper row-session ' + stripeClass;
               childTime.style.width = totalTimelineWidth + 'px';
               childTime.style.minWidth = totalTimelineWidth + 'px';
-              var sCanvas = createDayTimelineCanvas(totalTimelineWidth, startDate, totalDays);
+              var sCanvas = createDayTimelineCanvas(totalTimelineWidth, startDate, totalDays, c.id);
               var prepDays = diffDaysRaw(s.prepStart, s.teachDate);
               if (prepDays > 0) {
                 drawDayBar(sCanvas, s.prepStart, addDays(s.teachDate, -1), startDate, 'bar-prep-' + theme, 'Prep: ' + s.title, c.name, !!s.prepDone, 0, s.note || '', sMetaExp, barHandler(c, 'session_prep', sIdx));
@@ -4260,12 +4563,14 @@
           }
         }
       });
+      renderPeriodPanel();
+      updateModalNoteButton();
     } catch (renderErr) {
       console.error("Gantt Render Error:", renderErr);
     }
   }
 
-  function createDayTimelineCanvas(width, startDate, totalDays) {
+  function createDayTimelineCanvas(width, startDate, totalDays, courseId) {
     var canvas = document.createElement('div');
     canvas.className = 'timeline-canvas';
     canvas.style.width = width + 'px';
@@ -4299,6 +4604,16 @@
       setWorkloadFocusDate(formatDateObjToStr(clickedDate));
     });
 
+    // Chuột phải vào vùng trống: menu theo ngày (và theo dự án của dòng này)
+    canvas.addEventListener('contextmenu', function(e) {
+      var dayIdx = Math.floor((e.clientX - canvas.getBoundingClientRect().left) / dayWidth);
+      if (dayIdx < 0 || dayIdx >= totalDays) return;
+      var clickedDate = new Date(startDate);
+      clickedDate.setDate(startDate.getDate() + dayIdx);
+      var ds = formatDateObjToStr(clickedDate);
+      showContextMenu(e, getDayNameVN(ds) + ' ' + formatVNDate(ds), buildDayMenuItems(ds, courseId, null));
+    });
+
     var now = new Date();
     now.setHours(0,0,0,0);
     var diff = Math.round((now - startDate) / (1000 * 60 * 60 * 24));
@@ -4307,6 +4622,7 @@
       todayEl.id = 'todayLineMarker';
       todayEl.className = 'today-line';
       todayEl.style.left = (diff * dayWidth) + 'px';
+      todayEl.style.width = dayWidth + 'px';
       canvas.appendChild(todayEl);
     }
     return canvas;
@@ -4319,7 +4635,13 @@
     var label = '';
     var start = '';
     var end = '';
-    if (kind === 'macro') {
+    if (kind === 'project') {
+      label = 'Ghi chú dự án';
+      getCourseTaskItems(c).forEach(function(it) {
+        if (!start || it.start < start) start = it.start;
+        if (!end || it.end > end) end = it.end;
+      });
+    } else if (kind === 'macro') {
       var macro = getCourseMacroDates(c);
       label = 'Đề cương';
       if (macro) { start = macro.start; end = addDays(macro.end, -1); }
@@ -4366,6 +4688,9 @@
   function barHandler(c, kind, idx) {
     var fn = function() { toggleBarComplete(c.id, kind, idx); };
     fn.block = describeBlock(c, kind, idx);
+    fn.courseId = c.id;
+    fn.kind = kind;
+    fn.idx = idx;
     return fn;
   }
 
@@ -4514,6 +4839,13 @@
       });
     }
 
+    if (typeof onClickHandler === 'function' && onClickHandler.courseId) {
+      bar.addEventListener('contextmenu', function(e) {
+        document.getElementById('tooltip').style.display = 'none';
+        showContextMenu(e, courseTitle, buildBlockMenuItems(onClickHandler.courseId, onClickHandler.kind, onClickHandler.idx, isDone));
+      });
+    }
+
     bar.addEventListener('mouseenter', function(e) {
       var tooltip = document.getElementById('tooltip');
       var statusText = isDone
@@ -4572,6 +4904,7 @@
 
     populateModalBodyForCourse(c);
     document.getElementById('editModal').className = 'modal-backdrop active';
+    updateModalNoteButton();
   }
 
   function populateModalBodyForCourse(c) {
@@ -5023,13 +5356,17 @@
   }
 
   function deleteCourse() {
-    var c = courses.find(function(item) { return item.id === activeCourseId; });
+    deleteCourseById(activeCourseId);
+  }
+
+  function deleteCourseById(courseId) {
+    var c = courses.find(function(item) { return item.id === courseId; });
     if (!c) return;
     if (confirm('Xóa dự án "' + c.name + '" khỏi Timeline?\n(Hệ thống sẽ lưu vết ID của dự án này để không tự động tải lại khi đồng bộ với sync-server)')) {
       recordDeletedProject(c);
-      courses = courses.filter(function(item) { return item.id !== activeCourseId; });
+      courses = courses.filter(function(item) { return item.id !== courseId; });
       saveData();
-      closeModal();
+      if (activeCourseId === courseId) closeModal();
       renderGantt();
     }
   }
@@ -5188,9 +5525,528 @@
     }, 300);
   }
 
+  // =========================================================================
+  // 15. GIAO DIỆN SÁNG / TỐI
+  // =========================================================================
+  var THEME_KEY = 'academic_smart_gantt_theme';
+
+  function getSavedTheme() {
+    var v = readStored(THEME_KEY);
+    return (v === 'dark' || v === 'light') ? v : null;
+  }
+
+  function systemTheme() {
+    try {
+      return (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+    } catch (e) {
+      return 'light';
+    }
+  }
+
+  function currentTheme() {
+    return document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+  }
+
+  function applyTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    var btn = document.getElementById('btnTheme');
+    if (btn) {
+      btn.textContent = theme === 'dark' ? '☀️ Sáng' : '🌙 Tối';
+      btn.title = theme === 'dark' ? 'Chuyển sang giao diện Sáng' : 'Chuyển sang giao diện Tối';
+    }
+  }
+
+  function toggleTheme() {
+    var next = currentTheme() === 'dark' ? 'light' : 'dark';
+    writeStored(THEME_KEY, next);
+    applyTheme(next);
+  }
+
+  function initTheme() {
+    applyTheme(getSavedTheme() || systemTheme());
+    // Chưa chọn thủ công thì theo giao diện của macOS khi đổi Sáng/Tối.
+    try {
+      var mq = window.matchMedia('(prefers-color-scheme: dark)');
+      var onChange = function() { if (!getSavedTheme()) applyTheme(systemTheme()); };
+      if (mq.addEventListener) mq.addEventListener('change', onChange);
+      else if (mq.addListener) mq.addListener(onChange);
+    } catch (e) {}
+  }
+
+  // =========================================================================
+  // 16. LỚP ĐANG GIẢNG HÔM NAY / ĐANG TRONG KỲ GIẢNG DẠY
+  // =========================================================================
+  // state 'today': hôm nay có buổi giảng; 'term': hôm nay nằm giữa buổi đầu và buổi cuối nhưng không có buổi giảng.
+  function getTeachingStatus(c, todayStr) {
+    if (isResearchCourse(c) || isConsultingCourse(c)) return null;
+    var sessions = c.sessions || [];
+    var dates = sessions.map(function(s) { return s.teachDate; }).filter(Boolean).sort();
+    if (!dates.length) return null;
+    var first = dates[0];
+    var last = dates[dates.length - 1];
+    if (todayStr < first || todayStr > last) return null;
+    var todays = sessions.filter(function(s) { return s.teachDate === todayStr; });
+    return {
+      state: todays.length ? 'today' : 'term',
+      sessions: todays,
+      total: sessions.length,
+      done: sessions.filter(function(s) { return s.teachDone; }).length,
+      first: first,
+      last: last
+    };
+  }
+
+  // =========================================================================
+  // 17. CÔNG VIỆC THEO TUẦN / THÁNG (kèm ngày)
+  // =========================================================================
+  var periodState = { mode: null, anchor: null }; // mode: 'week' | 'month' | null
+  var PERIOD_STAGE_ORDER = { macro: 0, prep: 1, teach: 2, eval: 3, submit: 4, deliv: 5 };
+
+  function parseDateStr(str) {
+    var p = String(str || '').split('-');
+    return new Date(parseInt(p[0], 10), parseInt(p[1], 10) - 1, parseInt(p[2], 10));
+  }
+
+  // Tất cả khối công việc của một dự án; kind/idx khớp với toggleBarComplete / describeBlock.
+  function getCourseTaskItems(c) {
+    var items = [];
+    function add(kind, idx, stage, label, start, end, done, detail) {
+      if (!start || !end) return;
+      items.push({ courseId: c.id, courseName: c.name, kind: kind, idx: idx, stage: stage, label: label,
+        start: start, end: end, done: !!done, detail: detail || '' });
+    }
+    if (isResearchCourse(c)) {
+      (c.submissions || []).forEach(function(sub, i) {
+        var j = sub.journal || c.journalName;
+        add('research_submit', i, 'submit', (sub.title || ('Submit lần ' + (i + 1))) + (j ? ' (' + j + ')' : ''), sub.date, sub.date, sub.done, sub.note);
+      });
+    } else if (isConsultingCourse(c)) {
+      (c.deliverables || []).forEach(function(d, i) {
+        add('consulting_deliverable', i, 'deliv', d.title || ('Sản phẩm ' + (i + 1)), d.date, d.date, d.done, d.note);
+      });
+    } else {
+      var macro = getCourseMacroDates(c);
+      if (macro) add('macro', 0, 'macro', 'Đề cương (' + c.macroDays + ' ngày)', macro.start, addDays(macro.end, -1), c.macroDone, c.macroNote);
+      (c.sessions || []).forEach(function(s, i) {
+        var title = s.title || ('Buổi ' + s.num);
+        if (diffDaysRaw(s.prepStart, s.teachDate) > 0) {
+          add('session_prep', i, 'prep', 'Soạn bài: ' + title, s.prepStart, addDays(s.teachDate, -1), s.prepDone, s.note);
+        }
+        var loc = getDisplayLocation(s.locationType || c.locationType, s.locationCustom !== undefined ? s.locationCustom : c.locationCustom);
+        add('session_teach', i, 'teach', title, s.teachDate, s.teachDate, s.teachDone,
+          formatTimeRange(s.startTime || c.startTime, s.durationHours || c.durationHours) + ' · ' + loc);
+      });
+      if (c.hasEvaluation !== false && c.evaluation && c.evaluation.start && c.evaluation.end) {
+        add('eval', 0, 'eval', c.evaluation.name || 'Chấm thi', c.evaluation.start, c.evaluation.end, c.evaluation.done, c.evaluation.note);
+      }
+    }
+    return items;
+  }
+
+  function getPeriodRange(mode, anchor) {
+    var d = parseDateStr(anchor);
+    var start;
+    var end;
+    if (mode === 'week') {
+      start = new Date(d.getFullYear(), d.getMonth(), d.getDate() - ((d.getDay() + 6) % 7)); // Thứ Hai
+      end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 6);
+    } else {
+      start = new Date(d.getFullYear(), d.getMonth(), 1);
+      end = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+    }
+    return { start: formatDateObjToStr(start), end: formatDateObjToStr(end) };
+  }
+
+  function collectPeriodTasks(from, to) {
+    var out = [];
+    getFilteredAndSortedCourses().forEach(function(c) {
+      getCourseTaskItems(c).forEach(function(it) {
+        if (it.end < from || it.start > to) return;
+        it.groupDate = it.start < from ? from : it.start;
+        out.push(it);
+      });
+    });
+    out.sort(function(a, b) {
+      return a.groupDate.localeCompare(b.groupDate) ||
+        (PERIOD_STAGE_ORDER[a.stage] - PERIOD_STAGE_ORDER[b.stage]) ||
+        a.courseName.localeCompare(b.courseName);
+    });
+    return out;
+  }
+
+  function updatePeriodButtons() {
+    var w = document.getElementById('btnPeriodWeek');
+    var m = document.getElementById('btnPeriodMonth');
+    if (w) w.classList.toggle('active', periodState.mode === 'week');
+    if (m) m.classList.toggle('active', periodState.mode === 'month');
+  }
+
+  function setPeriodView(mode) {
+    if (!mode || mode === periodState.mode) {
+      periodState.mode = null;
+    } else {
+      periodState.mode = mode;
+      if (!periodState.anchor) periodState.anchor = getTodayStr();
+    }
+    renderPeriodPanel();
+  }
+
+  function showPeriodForDate(mode, dateStr) {
+    periodState.mode = mode;
+    periodState.anchor = dateStr || getTodayStr();
+    renderPeriodPanel();
+    var panel = document.getElementById('periodPanel');
+    if (panel && panel.scrollIntoView) { try { panel.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (e) {} }
+  }
+
+  function shiftPeriod(dir) {
+    if (!periodState.mode) return;
+    var d = parseDateStr(periodState.anchor || getTodayStr());
+    if (periodState.mode === 'week') d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 7 * dir);
+    else d = new Date(d.getFullYear(), d.getMonth() + dir, 1);
+    periodState.anchor = formatDateObjToStr(d);
+    renderPeriodPanel();
+  }
+
+  function periodToToday() {
+    periodState.anchor = getTodayStr();
+    renderPeriodPanel();
+  }
+
+  function formatShortRange(start, end) {
+    var a = formatVNDate(start).slice(0, 5);
+    return start === end ? a : (a + ' → ' + formatVNDate(end).slice(0, 5));
+  }
+
+  function renderPeriodPanel() {
+    var panel = document.getElementById('periodPanel');
+    var body = document.getElementById('periodBody');
+    updatePeriodButtons();
+    if (!panel || !body) return;
+    if (!periodState.mode) {
+      panel.style.display = 'none';
+      return;
+    }
+    panel.style.display = '';
+    var range = getPeriodRange(periodState.mode, periodState.anchor || getTodayStr());
+    var todayStr = getTodayStr();
+    var titleEl = document.getElementById('periodTitle');
+    if (periodState.mode === 'week') {
+      titleEl.textContent = '📋 Công việc tuần ' + formatVNDate(range.start).slice(0, 5) + ' → ' + formatVNDate(range.end);
+    } else {
+      var md = parseDateStr(range.start);
+      titleEl.textContent = '📋 Công việc tháng ' + (md.getMonth() + 1) + '/' + md.getFullYear();
+    }
+
+    var tasks = collectPeriodTasks(range.start, range.end);
+    var doneCount = tasks.filter(function(t) { return t.done; }).length;
+    document.getElementById('periodSummary').textContent = tasks.length + ' công việc · ' + doneCount + ' đã xong';
+
+    if (!tasks.length) {
+      body.innerHTML = '<div class="period-empty">Không có công việc nào trong khoảng thời gian này.</div>';
+      return;
+    }
+    var html = '';
+    var curDate = null;
+    tasks.forEach(function(t) {
+      if (t.groupDate !== curDate) {
+        if (curDate !== null) html += '</div>';
+        curDate = t.groupDate;
+        html += '<div class="period-day' + (curDate === todayStr ? ' is-today' : '') + '">' +
+          '<div class="period-day-head">' + getDayNameVN(curDate) + ' · ' + formatVNDate(curDate) +
+          (curDate === todayStr ? ' <span class="period-today-badge">Hôm nay</span>' : '') + '</div>';
+      }
+      var dates = formatShortRange(t.start, t.end) + (t.start < range.start ? ' (tiếp diễn)' : '');
+      html += '<div class="period-row st-' + t.stage + (t.done ? ' is-done' : '') + '"' +
+        ' data-course-id="' + escapeHtml(t.courseId) + '" data-kind="' + t.kind + '" data-idx="' + t.idx + '">' +
+        '<button type="button" class="pr-check" data-act="toggle" title="' + (t.done ? 'Hoàn tác' : 'Đánh dấu hoàn thành') + '">✓</button>' +
+        '<span class="pr-stage">' + (WORK_STAGE_LABELS[t.stage] || t.stage) + '</span>' +
+        '<span class="pr-main"><strong>' + escapeHtml(t.courseName) + '</strong> — ' + escapeHtml(t.label) +
+        (t.detail ? ' <span style="color:var(--text-muted);">· ' + escapeHtml(t.detail) + '</span>' : '') + '</span>' +
+        '<span class="pr-dates">📅 ' + dates + '</span>' +
+        '</div>';
+    });
+    html += '</div>';
+    body.innerHTML = html;
+  }
+
+  function initPeriodPanel() {
+    var body = document.getElementById('periodBody');
+    if (!body) return;
+    body.addEventListener('click', function(e) {
+      var row = e.target.closest('.period-row');
+      if (!row) return;
+      var courseId = row.getAttribute('data-course-id');
+      if (e.target.closest('[data-act="toggle"]')) {
+        toggleBarComplete(courseId, row.getAttribute('data-kind'), parseInt(row.getAttribute('data-idx'), 10));
+      } else {
+        openModal(courseId);
+      }
+    });
+    body.addEventListener('contextmenu', function(e) {
+      var row = e.target.closest('.period-row');
+      if (!row) return;
+      var courseId = row.getAttribute('data-course-id');
+      var c = courses.find(function(item) { return item.id === courseId; });
+      showContextMenu(e, c ? c.name : '', buildBlockMenuItems(courseId, row.getAttribute('data-kind'),
+        parseInt(row.getAttribute('data-idx'), 10), row.classList.contains('is-done')));
+    });
+  }
+
+  // =========================================================================
+  // 18. GHI CHÚ DỰ ÁN (MD EDITOR)
+  // =========================================================================
+  function openCourseNote(courseId) {
+    var id = (typeof courseId === 'string') ? courseId : activeCourseId;
+    var c = courses.find(function(item) { return item.id === id; });
+    if (!c) return;
+    openBlockNote(describeBlock(c, 'project', 0));
+  }
+
+  function updateModalNoteButton() {
+    var btn = document.getElementById('btnCourseNote');
+    if (!btn) return;
+    var linked = !!(activeCourseId && noteLinks[activeCourseId + '|project|0']);
+    btn.textContent = linked ? '📄 Mở ghi chú' : '📝 Thêm ghi chú';
+  }
+
+  // =========================================================================
+  // 19. MENU CHUỘT PHẢI
+  // =========================================================================
+  var ctxOpenedAt = 0;
+
+  function isContextMenuOpen() {
+    var el = document.getElementById('ctxMenu');
+    return !!(el && el.style.display === 'block');
+  }
+
+  function hideContextMenu() {
+    var el = document.getElementById('ctxMenu');
+    if (el) el.style.display = 'none';
+  }
+
+  // items: [{ label, run, danger, disabled } | { sep: true }]
+  function showContextMenu(ev, title, items) {
+    ev.preventDefault();
+    ev.stopPropagation();
+    var el = document.getElementById('ctxMenu');
+    if (!el) return;
+    el.innerHTML = '';
+    if (title) {
+      var t = document.createElement('div');
+      t.className = 'ctx-title';
+      t.textContent = title;
+      el.appendChild(t);
+    }
+    items.filter(Boolean).forEach(function(it) {
+      if (it.sep) {
+        var sep = document.createElement('div');
+        sep.className = 'ctx-sep';
+        el.appendChild(sep);
+        return;
+      }
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'ctx-item' + (it.danger ? ' danger' : '');
+      b.setAttribute('role', 'menuitem');
+      b.textContent = it.label;
+      if (it.disabled) b.disabled = true;
+      b.addEventListener('click', function(e) {
+        e.stopPropagation();
+        hideContextMenu();
+        if (it.run) it.run();
+      });
+      el.appendChild(b);
+    });
+    el.style.display = 'block';
+    ctxOpenedAt = Date.now();
+    var w = el.offsetWidth;
+    var h = el.offsetHeight;
+    el.style.left = Math.max(4, Math.min(ev.clientX, window.innerWidth - w - 6)) + 'px';
+    el.style.top = Math.max(4, Math.min(ev.clientY, window.innerHeight - h - 6)) + 'px';
+  }
+
+  function findCourseById(id) {
+    return courses.find(function(item) { return item.id === id; });
+  }
+
+  // Menu cho một khối (thanh Gantt hoặc dòng trong danh sách tuần/tháng)
+  function buildBlockMenuItems(courseId, kind, idx, isDone) {
+    var c = findCourseById(courseId);
+    if (!c) return [];
+    var block = describeBlock(c, kind, idx);
+    var linked = !!noteLinks[block.id];
+    var when = block.start || getTodayStr();
+    return [
+      { label: isDone ? '↩️ Hoàn tác (chưa xong)' : '✅ Đánh dấu hoàn thành', run: function() { toggleBarComplete(courseId, kind, idx); } },
+      { label: linked ? '📄 Mở ghi chú Markdown' : '📝 Tạo ghi chú Markdown', run: function() { openBlockNote(block); } },
+      linked ? { label: '🔗 Gỡ liên kết ghi chú', run: function() { delete noteLinks[block.id]; saveNoteLinks(); renderGantt(); } } : null,
+      { sep: true },
+      { label: '✏️ Chỉnh sửa dự án…', run: function() { openModal(courseId); } },
+      { label: '🎯 Xem tải công việc ngày ' + formatVNDate(when).slice(0, 5), run: function() { setWorkloadFocusDate(when); } },
+      { label: '📋 Công việc tuần này', run: function() { showPeriodForDate('week', when); } },
+      { label: '📋 Công việc tháng này', run: function() { showPeriodForDate('month', when); } }
+    ];
+  }
+
+  // Menu cho một dự án (dòng ở cột trái)
+  function buildCourseMenuItems(courseId) {
+    var c = findCourseById(courseId);
+    if (!c) return [];
+    var linked = !!noteLinks[courseId + '|project|0'];
+    var allDone = isCourseFullyCompleted(c);
+    var next = getCourseNextPendingItem(c);
+    return [
+      { label: '✏️ Chỉnh sửa dự án…', run: function() { openModal(courseId); } },
+      { label: linked ? '📄 Mở ghi chú dự án' : '📝 Thêm ghi chú dự án', run: function() { openCourseNote(courseId); } },
+      { sep: true },
+      { label: next ? ('⏭ Tới khối kế tiếp (' + formatVNDate(next.date).slice(0, 5) + ')') : '⏭ Không còn khối chưa xong',
+        disabled: !next, run: function() { scrollToDate(next.date); } },
+      { label: allDone ? '↩️ Bỏ hoàn thành toàn bộ' : '✅ Đánh dấu hoàn thành cả dự án', run: function() { toggleCourseCompleted(c); } },
+      { sep: true },
+      { label: '🗑️ Xóa dự án…', danger: true, run: function() { deleteCourseById(courseId); } }
+    ];
+  }
+
+  // Menu cho một ngày (đầu cột ngày hoặc vùng trống của dòng)
+  function buildDayMenuItems(dateStr, courseId, cell) {
+    var dayName = getDayNameVN(dateStr);
+    var c = courseId ? findCourseById(courseId) : null;
+    return [
+      { label: '🔍 Xem chi tiết ngày ' + formatVNDate(dateStr).slice(0, 5), run: function() {
+          var target = cell || document.querySelector('.day-header-cell[data-date="' + dateStr + '"]');
+          openDayInspectorPopup(dateStr, dayName, { stopPropagation: function() {}, currentTarget: target });
+        } },
+      { label: '🎯 Xem tải công việc ngày này', run: function() { setWorkloadFocusDate(dateStr); } },
+      { sep: true },
+      { label: '📋 Công việc tuần này', run: function() { showPeriodForDate('week', dateStr); } },
+      { label: '📋 Công việc tháng này', run: function() { showPeriodForDate('month', dateStr); } },
+      { label: '📍 Về hôm nay', run: function() { scrollToToday(); resetWorkloadFocusToToday(); } },
+      c ? { sep: true } : null,
+      c ? { label: '✏️ Chỉnh sửa dự án “' + c.name + '”…', run: function() { openModal(courseId); } } : null
+    ];
+  }
+
+  function scrollToDate(dateStr) {
+    var wrapper = document.getElementById('ganttScrollWrapper');
+    if (!wrapper) return;
+    var offset = Math.round((parseDateStr(dateStr) - getTimelineOriginDate()) / 86400000);
+    wrapper.scrollTo({ left: Math.max(0, offset * dayWidth - 140), behavior: 'smooth' });
+  }
+
+  function initContextMenus() {
+    var sidebar = document.getElementById('ganttSidebarList');
+    if (sidebar) {
+      sidebar.addEventListener('contextmenu', function(e) {
+        var row = e.target.closest('[data-course-id]');
+        if (!row) return;
+        var id = row.getAttribute('data-course-id');
+        var c = findCourseById(id);
+        showContextMenu(e, c ? c.name : '', buildCourseMenuItems(id));
+      });
+    }
+    document.addEventListener('click', hideContextMenu);
+    document.addEventListener('contextmenu', function(e) {
+      // Các vùng có menu riêng đã tự mở menu và chặn lan sự kiện; chỗ khác thì đóng menu đang mở.
+      if (!e.target.closest || !e.target.closest('#ctxMenu')) hideContextMenu();
+    });
+    window.addEventListener('blur', hideContextMenu);
+    window.addEventListener('resize', hideContextMenu);
+    var wrapper = document.getElementById('ganttScrollWrapper');
+    // Cuộn danh sách thì đóng menu (bỏ qua cú cuộn tự động ngay sau khi mở menu).
+    if (wrapper) wrapper.addEventListener('scroll', function() { if (Date.now() - ctxOpenedAt > 250) hideContextMenu(); });
+  }
+
+  // =========================================================================
+  // 20. TỰ ĐỘNG CẬP NHẬT TỪ APPLE CALENDAR
+  // =========================================================================
+  var MAC_AUTO_KEY = 'academic_smart_gantt_mac_autosync';
+  var MAC_AUTO_INTERVAL_MS = 5 * 60 * 1000;
+  var MAC_AUTO_MIN_GAP_MS = 60 * 1000;
+  var macAutoBusy = false;
+  var macAutoLastRun = 0;
+
+  function isMacAutoEnabled() {
+    return readStored(MAC_AUTO_KEY) !== '0'; // mặc định bật
+  }
+
+  function setMacAutoSync(on) {
+    writeStored(MAC_AUTO_KEY, on ? '1' : '0');
+    updateMacAutoUI();
+    if (on) runMacAutoSync(true);
+  }
+
+  function setMacAutoStatus(text, bad) {
+    var el = document.getElementById('macAutoStatus');
+    if (!el) return;
+    el.textContent = text || '';
+    el.className = 'auto-sync-status' + (bad ? ' bad' : '');
+    el.style.display = text ? '' : 'none';
+  }
+
+  function updateMacAutoUI() {
+    var box = document.getElementById('macAutoSyncToggle');
+    if (box) box.checked = isMacAutoEnabled();
+    var hint = document.getElementById('macAutoSyncHint');
+    if (hint) {
+      var hasSel = !!(getSavedMacCalendarIds() || []).length;
+      hint.textContent = !isMacAutoEnabled()
+        ? 'Đang tắt: chỉ cập nhật khi bấm “Kéo Lịch Từ Apple Calendar”.'
+        : (hasSel
+          ? 'Tự cập nhật khi mở ứng dụng, khi quay lại cửa sổ và mỗi 5 phút (các lịch đã tick ở trên).'
+          : 'Tick chọn lịch và bấm “Kéo Lịch…” một lần để bắt đầu tự cập nhật.');
+    }
+    if (!isMacAutoEnabled()) setMacAutoStatus('');
+  }
+
+  function pad2(n) { return (n < 10 ? '0' : '') + n; }
+
+  async function runMacAutoSync(force) {
+    if (!hasNativeCalendar() || !isMacAutoEnabled() || macAutoBusy) return;
+    var modal = document.getElementById('editModal');
+    if (modal && modal.classList.contains('active')) return; // đang sửa dự án: không đổi dữ liệu bên dưới
+    var ids = getSavedMacCalendarIds();
+    if (!ids || !ids.length) return;
+    if (!force && Date.now() - macAutoLastRun < MAC_AUTO_MIN_GAP_MS) return;
+    macAutoBusy = true;
+    try {
+      var rawEvents = await window.GanttNative.fetchEvents(ids);
+      var changed = 0;
+      if (rawEvents && rawEvents.length) {
+        var hasEvalEl = document.getElementById('commonHasEvaluation');
+        var macroEl = document.getElementById('commonMacroDaysRange');
+        var macroDays = macroEl ? parseInt(macroEl.value, 10) : 7;
+        if (isNaN(macroDays)) macroDays = 7;
+        changed = groupAndCreateCourses(rawEvents, hasEvalEl ? hasEvalEl.checked : true, macroDays, true, true).changed;
+      }
+      macAutoLastRun = Date.now();
+      var now = new Date();
+      setMacAutoStatus('🔁 Lịch cập nhật ' + pad2(now.getHours()) + ':' + pad2(now.getMinutes()) + (changed ? ' (+' + changed + ' thay đổi)' : ''));
+    } catch (e) {
+      macAutoLastRun = Date.now();
+      setMacAutoStatus('⚠️ Chưa cập nhật được Lịch', true);
+      var el = document.getElementById('macAutoStatus');
+      if (el) el.title = (e && e.message ? e.message : String(e)) + '\nBấm để thử lại.';
+    } finally {
+      macAutoBusy = false;
+    }
+  }
+
+  function initMacAutoSync() {
+    if (!hasNativeCalendar()) return;
+    updateMacAutoUI();
+    setTimeout(function() { runMacAutoSync(true); }, 1500);
+    setInterval(function() { runMacAutoSync(false); }, MAC_AUTO_INTERVAL_MS);
+    window.addEventListener('focus', function() { runMacAutoSync(false); });
+    document.addEventListener('visibilitychange', function() {
+      if (document.visibilityState === 'visible') runMacAutoSync(false);
+    });
+  }
+
   // Nhấn Esc để đóng cửa sổ chỉnh sửa dự án
   document.addEventListener('keydown', function(e) {
     if (e.key !== 'Escape' || e.isComposing) return;
+    if (isContextMenuOpen()) { e.preventDefault(); hideContextMenu(); return; }
     var modal = document.getElementById('editModal');
     if (modal && modal.classList.contains('active')) {
       e.preventDefault();
@@ -5199,14 +6055,18 @@
   });
 
   // Khởi chạy an toàn
+  initTheme();
   initSaveStatus();
   initNativeFilePickers();
   initMacSyncPanel();
+  initPeriodPanel();
+  initContextMenus();
   renderCreationSubmissionsList();
   renderCreationDeliverablesList();
   renderGantt();
   setTimeout(scrollToToday, 120);
   handleBootFailure();
+  initMacAutoSync();
 </script>
 </body>
 </html>

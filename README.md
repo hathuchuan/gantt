@@ -82,6 +82,16 @@ Cách app giữ dữ liệu an toàn:
 - Hai ứng dụng nói chuyện qua URL: `mdeditor://note?...` (Gantt → MD Editor) và `academicgantt://open|link|unlink?block=...` (MD Editor → Gantt). Mã khối có dạng `<mã dự án>|<loại>|<số>`.
 - Liên kết lưu ở khóa `academic_smart_gantt_notes` trong `storage.json` (tách khỏi danh sách dự án nên không mất khi đồng bộ Calendar). Chưa nằm trong **Xuất JSON**.
 
+## 3d. Giao diện mới
+
+- **Cột trái:** lớp **giảng hôm nay** tô xanh lục đậm (kèm giờ giảng); lớp **đang trong kỳ giảng dạy** (hôm nay nằm giữa buổi đầu và buổi cuối nhưng không có buổi giảng) tô xanh lam nhạt.
+- **Hôm nay:** cột hôm nay tô hồng nhạt trong suốt (không còn đường kẻ đỏ).
+- **Sáng / Tối:** nút ở đầu trang; mặc định theo giao diện macOS, lựa chọn thủ công được ghi nhớ.
+- **Công việc theo tuần / tháng:** nút **📋 Tuần / 📋 Tháng** trên thanh công cụ mở danh sách công việc kèm ngày (đề cương, soạn bài, giảng dạy, chấm thi, submit, sản phẩm), có ‹ › để đổi kỳ, tick để hoàn thành.
+- **Ghi chú dự án:** nút **📝 Thêm ghi chú / 📄 Mở ghi chú** trong cửa sổ chỉnh sửa dự án mở MD Editor (khối `<mã dự án>|project|0`).
+- **Tự cập nhật Apple Calendar:** khi mở ứng dụng, khi quay lại cửa sổ và mỗi 5 phút (các lịch đã chọn ở tab 🍎 Đồng Bộ Mac; cần bấm "Kéo Lịch" một lần để ghi nhớ lịch). Tắt được bằng ô tick trong tab đó.
+- **Menu chuột phải:** trên khối (hoàn thành, ghi chú, chỉnh sửa, xem tuần/tháng), trên dự án ở cột trái (chỉnh sửa, ghi chú, hoàn thành cả dự án, tới khối kế tiếp, xóa), trên đầu cột ngày / vùng trống (chi tiết ngày, tải công việc, tuần/tháng, về hôm nay).
+
 ## 4. Những gì thay đổi so với `sync_server.py`
 
 | Hạng mục | Trước (HTML + `sync_server.py`) | Nay (ứng dụng) |
