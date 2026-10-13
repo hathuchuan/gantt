@@ -83,13 +83,77 @@
   });
 
   editor.addEventListener('paste', (e) => {
-    const text = e.clipboardData.getData('text/plain');
+    const cd = e.clipboardData;
+    const text = cd.getData('text/plain');
+    // A screenshot / copied picture: store it next to the note and insert ![](…).
+    const picture = [...cd.files].find((f) => f.type.startsWith('image/'));
+    if (picture && !text) {
+      e.preventDefault();
+      return void insertImages([{ file: picture, name: E.pastedImageName(new Date(), imageExt(picture.type)), alt: '' }]);
+    }
+    // Rich text from Word, Google Docs or a web page becomes Markdown.
+    const html = cd.getData('text/html');
+    if (html && Html2Md.isRich(html)) {
+      e.preventDefault();
+      return void pasteHtml(html);
+    }
     const ed = E.pasteUrl(editor.value, editor.selectionStart, editor.selectionEnd, text);
     if (ed) {
       e.preventDefault();
       applyEdit(ed);
     }
   });
+
+  // ---------- images (paste / drop) ----------
+  const IMAGE_EXTS = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp', 'image/bmp': 'bmp', 'image/svg+xml': 'svg', 'image/tiff': 'tiff', 'image/avif': 'avif' };
+  const imageExt = (type) => IMAGE_EXTS[type] || 'png';
+  const IMAGE_ERRORS = { type: 'That file type isn’t supported.', size: 'The image is empty or too large.', write: 'Couldn’t write the image next to the note.' };
+
+  // Saves each image in the note's folder; resolves to the Markdown for the ones that worked.
+  async function saveImages(items) {
+    if (!docPath) {
+      toast('Save the note first (⌘S) — images are stored in the same folder as the note.');
+      return [];
+    }
+    const refs = [];
+    for (const it of items) {
+      const bytes = new Uint8Array(await it.file.arrayBuffer());
+      const r = await api.saveImage({ name: it.name, bytes, srcPath: it.path });
+      if (r.error) toast(r.error === 'unsaved' ? 'Save the note first (⌘S).' : IMAGE_ERRORS[r.error] || 'Couldn’t add the image.');
+      else refs.push(E.imageRef(r.name, it.alt));
+    }
+    return refs;
+  }
+
+  async function insertImages(items) {
+    const refs = await saveImages(items);
+    const ed = E.insertSnippets(editor.value, editor.selectionStart, editor.selectionEnd, refs);
+    if (ed) applyEdit(ed);
+  }
+
+  // Markdown from pasted HTML: embedded (data:) pictures are saved beside the note, or dropped when it has no file yet.
+  const DATA_IMG = /!\[([^\]]*)\]\(<?data:image\/([a-z0-9.+-]+);base64,([A-Za-z0-9+/=\s]+?)>?\)/gi;
+  async function pasteHtml(html) {
+    let md = Html2Md.toMarkdown(html).replace(/\n+$/, '');
+    const pics = [...md.matchAll(DATA_IMG)];
+    if (pics.length) {
+      if (!docPath) toast('Pictures in the pasted text were skipped — save the note first to keep them.');
+      for (const m of pics) {
+        let ref = '';
+        if (docPath) {
+          const bin = atob(m[3].replace(/\s/g, ''));
+          const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
+          const file = new Blob([bytes]);
+          const [saved] = await saveImages([{ file, name: E.pastedImageName(new Date(), imageExt('image/' + m[2].toLowerCase())), alt: m[1] }]);
+          ref = saved || '';
+        }
+        md = md.replace(m[0], () => ref);
+      }
+    }
+    if (!md.trim()) return;
+    const s = editor.selectionStart;
+    applyEdit({ from: s, to: editor.selectionEnd, text: md, selStart: s + md.length, selEnd: s + md.length });
+  }
 
   function format(action) {
     const { value: v, selectionStart: s, selectionEnd: e } = editor;
@@ -188,6 +252,26 @@
   }
 
   // ---------- preview / edit ----------
+  // The block's dates and live progress, read from Academic Gantt each time the preview opens.
+  function ganttCard(meta) {
+    const card = el('div', 'gantt-card');
+    card.append(ganttChip(meta));
+    api.ganttBlock(meta['gantt-block']).then((r) => {
+      if (!r || r.error || !card.isConnected) return;
+      const b = r.block;
+      const bar = el('div', 'gc-bar ' + b.status);
+      const fill = el('i');
+      fill.style.width = b.percent + '%';
+      bar.append(fill);
+      card.append(
+        bar,
+        el('div', 'gc-line ' + b.status, E.statusText(b) + ' · ' + b.percent + '% of ' + b.totalDays + (b.totalDays === 1 ? ' day' : ' days')),
+        el('div', 'gc-line', 'Project: ' + b.courseDone + '/' + b.courseTotal + ' blocks done')
+      );
+    });
+    return card;
+  }
+
   function ganttChip(meta) {
     const chip = el('button', 'event-chip', '🗓 ' + (meta['gantt-title'] || meta['gantt-block']));
     const range = meta['gantt-start'] && meta['gantt-end'] ? (meta['gantt-start'] === meta['gantt-end'] ? meta['gantt-start'] : meta['gantt-start'] + ' → ' + meta['gantt-end']) : '';
@@ -197,17 +281,28 @@
     return chip;
   }
 
-  function renderPreview() {
-    const fm = E.parseFrontMatter(editor.value);
-    preview.innerHTML = DOMPurify.sanitize(marked.parse(fm.body, { gfm: true }), { ALLOWED_URI_REGEXP: SAFE_URI });
-    preview.querySelectorAll('.math-ph').forEach((node) => {
+  // Markdown → sanitised HTML in `target`, with KaTeX math and syntax-coloured code.
+  function renderInto(target, md) {
+    target.innerHTML = DOMPurify.sanitize(marked.parse(md, { gfm: true }), { ALLOWED_URI_REGEXP: SAFE_URI });
+    target.querySelectorAll('.math-ph').forEach((node) => {
       try {
         katex.render(node.dataset.tex, node, { displayMode: node.dataset.display === '1', throwOnError: false, trust: false });
       } catch {
         node.textContent = node.dataset.tex;
       }
     });
-    if (fm.meta['gantt-block']) preview.prepend(ganttChip(fm.meta));
+    target.querySelectorAll('pre code').forEach((node) => {
+      const lang = (/(?:^|\s)language-([\w+#-]+)/.exec(node.className) || [])[1];
+      if (!lang || !hljs.getLanguage(lang.toLowerCase())) return;
+      node.innerHTML = hljs.highlight(node.textContent, { language: lang.toLowerCase(), ignoreIllegals: true }).value;
+      node.classList.add('hljs');
+    });
+  }
+
+  function renderPreview() {
+    const fm = E.parseFrontMatter(editor.value);
+    renderInto(preview, fm.body);
+    if (fm.meta['gantt-block']) preview.prepend(ganttCard(fm.meta));
   }
 
   function setMode(next) {
@@ -220,6 +315,7 @@
       renderPreview();
       preview.hidden = false;
       editor.hidden = true;
+      refreshProjectNotes().then((changed) => changed && mode === 'preview' && renderPreview());
     } else {
       preview.hidden = true;
       editor.hidden = false;
@@ -392,6 +488,8 @@
     const meta = ganttBlockOfNote();
     if (!meta) return toast('This note isn’t linked to a Gantt block.');
     applyEdit(E.clearGantt(editor.value, editor.selectionStart, editor.selectionEnd));
+    const bare = E.stripProjectNotes(editor.value);
+    if (bare !== editor.value) applyEdit({ from: 0, to: editor.value.length, text: bare, selStart: 0, selEnd: 0 });
     await api.ganttUnlink(meta['gantt-block']);
     await save(false);
     toast('Unlinked from Gantt');
@@ -463,6 +561,147 @@
     });
   }
 
+  // ---------- notes of the same project ----------
+  const commonEnds = (a, b) => {
+    let p = 0;
+    while (p < a.length && p < b.length && a[p] === b[p]) p++;
+    let q = 0;
+    while (q < a.length - p && q < b.length - p && a[a.length - 1 - q] === b[b.length - 1 - q]) q++;
+    return [p, q];
+  };
+
+  // Replaces the whole text but keeps the caret and scroll where they were (the change is usually below or above them).
+  function replaceText(next) {
+    const prev = editor.value;
+    const [p, q] = commonEnds(prev, next);
+    const move = (pos) => (pos <= p ? pos : pos >= prev.length - q ? pos + next.length - prev.length : p);
+    const [a, b, top] = [move(editor.selectionStart), move(editor.selectionEnd), editor.scrollTop];
+    const clean = !isDirty();
+    editor.value = next;
+    editor.setSelectionRange(a, b);
+    editor.scrollTop = top;
+    if (clean) saved = next; // refreshing the list must not make a clean note look edited
+    updateState();
+  }
+
+  // Keeps the "notes in this project" list between its markers current. With `insert`, adds it when the note has none.
+  async function refreshProjectNotes({ insert = false } = {}) {
+    const meta = ganttBlockOfNote();
+    if (!meta || !docPath || (!insert && !E.hasProjectNotes(editor.value))) return false;
+    const r = await api.ganttProjectNotes({ block: meta['gantt-block'], file: docPath });
+    if (!r || r.error || !r.notes || !ganttBlockOfNote()) return false;
+    const next = E.updateProjectNotes(editor.value, r, insert);
+    if (next === null) return false;
+    replaceText(next);
+    return true;
+  }
+
+  async function projectNotesCommand() {
+    if (!ganttBlockOfNote()) return toast('Link this note to a Gantt block first (⇧⌘E).');
+    if (!docPath && !(await save(false))) return;
+    if (mode === 'preview') setMode('edit');
+    await refreshProjectNotes({ insert: true });
+    toast('Project notes list is up to date');
+  }
+
+  // ---------- Gantt tasks table ----------
+  function openProjectSheet(onPick) {
+    const input = el('input', 'filter');
+    input.type = 'text';
+    input.placeholder = 'Filter projects…';
+    const status = el('p', 'note', 'Loading…');
+    const list = el('div', 'events');
+    let projects = [];
+    let shown = [];
+    let index = 0;
+
+    function paint() {
+      const q = input.value.trim().toLowerCase();
+      shown = projects.filter((p) => !q || p.name.toLowerCase().includes(q));
+      index = Math.min(index, Math.max(0, shown.length - 1));
+      list.replaceChildren();
+      shown.forEach((p, i) => {
+        const row = el('div', 'event-row' + (i === index ? ' active' : ''));
+        row.append(el('span', 'label', p.name), el('span', 'key', p.count + ' blocks'));
+        row.addEventListener('click', () => pick(p));
+        list.append(row);
+      });
+      if (projects.length) status.textContent = shown.length ? '' : 'No matching projects.';
+    }
+    function pick(p) {
+      closeSheet();
+      onPick(p.id);
+    }
+
+    const token = openSheet(
+      'Gantt tasks table — choose a project',
+      (body) => body.append(input, status, list),
+      (e) => {
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+          e.preventDefault();
+          index = Math.max(0, Math.min(shown.length - 1, index + (e.key === 'ArrowDown' ? 1 : -1)));
+          paint();
+        } else if (e.key === 'Enter' && shown[index]) {
+          e.preventDefault();
+          pick(shown[index]);
+        }
+      }
+    );
+    input.addEventListener('input', () => {
+      index = 0;
+      paint();
+    });
+    input.focus();
+
+    api.ganttBlocks({ all: true }).then((r) => {
+      if (sheetToken !== token) return;
+      if (r.error) {
+        status.textContent = GANTT_ERRORS[r.error] || 'Couldn’t read the Gantt data.';
+        status.classList.add('error');
+        return;
+      }
+      const byId = new Map();
+      for (const b of r.blocks) {
+        const id = b.id.split('|')[0];
+        byId.set(id, { id, name: b.course || id, count: (byId.get(id) || { count: 0 }).count + 1 });
+      }
+      projects = [...byId.values()].sort((a, b) => a.name.localeCompare(b.name));
+      status.textContent = projects.length ? '' : 'No projects found in Academic Gantt.';
+      paint();
+    });
+  }
+
+  async function insertGanttTable(courseId) {
+    const r = await api.ganttBlocks({ course: courseId, all: true });
+    if (r.error) return toast(GANTT_ERRORS[r.error] || 'Couldn’t read the Gantt data.');
+    if (!r.blocks.length) return toast('That project has no blocks.');
+    if (mode === 'preview') setMode('edit');
+    editor.focus();
+    const today = new Date();
+    const caption = `**${r.blocks[0].course}** — tasks & deadlines (as of ${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')})`;
+    applyEdit(E.insertBlock(editor.value, editor.selectionStart, editor.selectionEnd, caption + '\n\n' + E.ganttTable(r.blocks)));
+  }
+
+  function ganttTableCommand() {
+    const meta = ganttBlockOfNote();
+    if (meta) insertGanttTable(meta['gantt-block'].split('|')[0]);
+    else openProjectSheet(insertGanttTable);
+  }
+
+  // ---------- export ----------
+  async function exportAs(kind) {
+    const body = E.stripProjectNotes(E.parseFrontMatter(editor.value).body);
+    toast('Exporting…');
+    let r;
+    if (kind === 'pdf') {
+      const holder = document.createElement('div');
+      renderInto(holder, body);
+      r = await api.exportPdf({ html: holder.innerHTML });
+    } else r = await api.exportDocx({ markdown: body, title: name.replace(/\.[^.]+$/, '') });
+    if (!r) return void ($('toast').hidden = true);
+    toast(r.error ? 'Couldn’t export: ' + r.error : 'Exported to ' + r.path.split('/').pop());
+  }
+
   // Links this note to a Gantt block: the note gets front matter, Gantt stores the note's path.
   async function attachBlock(b) {
     closeSheet();
@@ -470,6 +709,7 @@
     const r = await api.ganttLink({ block: b.id, file: docPath });
     if (r.error) return toast(GANTT_ERRORS[r.error] || 'Couldn’t update Academic Gantt.');
     applyEdit(E.setGantt(editor.value, editor.selectionStart, editor.selectionEnd, { block: b.id, course: b.course, label: b.label, start: b.start, end: b.end }));
+    await refreshProjectNotes({ insert: true });
     await save(false);
     toast('Linked to “' + b.label + '”');
   }
@@ -498,9 +738,11 @@
     editor.scrollTop = 0;
     if (mode === 'preview') setMode('preview');
     updateState();
+    refreshProjectNotes();
   }
 
   async function save(as) {
+    await refreshProjectNotes();
     const doc = await (as ? api.saveAs(editor.value) : api.save(editor.value));
     if (!doc) return false;
     saved = doc.content;
@@ -531,6 +773,15 @@
     gantt: openGanttSheet,
     'gantt-open': showInGantt,
     'gantt-unlink': unlinkFromGantt,
+    'gantt-table': ganttTableCommand,
+    'project-notes': projectNotesCommand,
+    'export-pdf': () => exportAs('pdf'),
+    'export-docx': () => exportAs('docx'),
+    'paste-plain': (text) => {
+      if (mode !== 'edit' || !text) return;
+      const s = editor.selectionStart;
+      applyEdit({ from: s, to: editor.selectionEnd, text, selStart: s + text.length, selEnd: s + text.length });
+    },
     save: () => save(false),
     'save-as': () => save(true),
     'open-path': openPath,
@@ -543,14 +794,24 @@
   });
 
   addEventListener('dragover', (e) => e.preventDefault());
-  // Dropping files into the note inserts links to them (text = file name); ⌘-click or click in Preview opens them.
-  addEventListener('drop', (e) => {
+  // Dropping files into the note inserts links to them (text = file name); pictures are copied next to the note
+  // and inserted as images. ⌘-click or click in Preview opens links.
+  addEventListener('drop', async (e) => {
     e.preventDefault();
-    const paths = [...e.dataTransfer.files].map((f) => api.pathForFile(f));
-    if (!paths.some(Boolean)) return;
+    const items = [...e.dataTransfer.files].map((file) => ({ file, path: api.pathForFile(file) }));
+    if (!items.length) return;
+    const isPicture = (it) => it.file.type.startsWith('image/') || E.isImageName(it.file.name);
+    const pictures = items.filter(isPicture).map((it) => ({
+      ...it,
+      name: E.isImageName(it.file.name) ? it.file.name : E.pastedImageName(new Date(), imageExt(it.file.type)),
+      alt: it.file.name.replace(/\.[^.]+$/, ''),
+    }));
+    const links = items.filter((it) => !isPicture(it) && it.path).map((it) => E.fileLink(it.path));
+    if (!pictures.length && !links.length) return;
     if (mode === 'preview') setMode('edit');
     editor.focus();
-    const ed = E.dropFiles(editor.value, editor.selectionStart, editor.selectionEnd, paths);
+    const snippets = [...(await saveImages(pictures)), ...links];
+    const ed = E.insertSnippets(editor.value, editor.selectionStart, editor.selectionEnd, snippets);
     if (ed) applyEdit(ed);
   });
 
@@ -559,7 +820,10 @@
     if (e.key === 'night') document.documentElement.dataset.theme = e.newValue === '1' ? 'dark' : 'light';
   });
 
-  addEventListener('focus', reloadCommands);
+  addEventListener('focus', () => {
+    reloadCommands();
+    if (!isDirty() && sheet.hidden) refreshProjectNotes().then((changed) => changed && mode === 'preview' && renderPreview());
+  });
   reloadCommands();
   setNight(isNight());
   updateState();

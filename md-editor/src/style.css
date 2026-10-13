@@ -170,3 +170,15 @@ body[data-mode='preview'] #toggle .i-pen { display: block; }
 #preview .math-ph[data-display] { display: block; margin: 1.1em 0; overflow-x: auto; text-align: center; }
 #preview mark { background: rgba(255, 214, 10, 0.35); color: inherit; padding: 0 0.15em; border-radius: 3px; }
 #preview kbd { font: 0.85em var(--mono); padding: 0.1em 0.45em; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 5px; }
+
+/* Gantt block card at the top of a linked note's preview */
+#preview .gantt-card { margin: 0 0 1.4em; padding: 12px 14px 10px; background: var(--code-bg); border-radius: 12px; font-size: 13px; line-height: 1.5; }
+#preview .gantt-card .event-chip { margin: 0 0 6px; padding: 0; background: none; font-size: 14px; font-weight: 600; color: var(--fg); text-align: left; }
+#preview .gantt-card .gc-line { color: var(--muted); }
+#preview .gantt-card .gc-line.overdue { color: #d93025; }
+#preview .gantt-card .gc-line.done { color: #1e8e3e; }
+#preview .gc-bar { height: 6px; margin: 8px 0; background: var(--line); border-radius: 3px; overflow: hidden; }
+#preview .gc-bar i { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
+#preview .gc-bar.done i { background: #1e8e3e; }
+#preview .gc-bar.overdue i { background: #d93025; }
+#preview .gc-bar.upcoming i { background: var(--muted); }
