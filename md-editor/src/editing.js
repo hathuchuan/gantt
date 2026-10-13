@@ -175,6 +175,8 @@
     it('Insert', 'time', 'Current time', '🕒', '{time}'),
     it('Insert', 'gantt', 'Link to Gantt block', '🗓', null, { action: 'gantt' }),
     it('Insert', 'ganttopen', 'Show in Gantt', '↗', null, { action: 'gantt-open' }),
+    it('Insert', 'ganttblocks', 'Gantt tasks & deadlines table', '▦', null, { action: 'gantt-table' }),
+    it('Insert', 'projectnotes', 'Project notes list (auto-updating)', '☰', null, { action: 'project-notes' }),
 
     it('Math', 'math', 'Inline math', '$', '${cursor}$'),
     it('Math', 'mathblock', 'Math block', '$$', '$$\n{cursor}\n$$', BLOCK),
@@ -273,22 +275,104 @@
 
   // ---------- links to local files ----------
   // `[file name](file:///path/file%20name.pdf)` — the link text defaults to the file name.
-  function fileLink(p) {
+  const encPath = (p) =>
+    String(p)
+      .split('/')
+      .map((x) => encodeURIComponent(x).replace(/\(/g, '%28').replace(/\)/g, '%29'))
+      .join('/');
+  const escText = (t) => String(t).replace(/[\\\[\]*_`<>~|]/g, '\\$&');
+
+  function fileLink(p, text) {
     const parts = String(p).split('/');
-    const name = parts[parts.length - 1] || String(p);
-    const enc = (x) => encodeURIComponent(x).replace(/\(/g, '%28').replace(/\)/g, '%29');
-    return `[${name.replace(/[\\\[\]*_`<>~]/g, '\\$&')}](file://${parts.map(enc).join('/')})`;
+    const name = text || parts[parts.length - 1] || String(p);
+    return `[${escText(name)}](file://${encPath(p)})`;
   }
 
-  // Replace the selection with links to the dropped files (one per line when there are several).
-  function dropFiles(v, s, e, paths) {
-    const links = paths.filter(Boolean).map(fileLink);
-    if (!links.length) return null;
+  // Replace the selection with snippets (one per line when there are several).
+  function insertSnippets(v, s, e, snippets) {
+    const list = snippets.filter(Boolean);
+    if (!list.length) return null;
     const lead = s > 0 && !/\s/.test(v[s - 1]) ? ' ' : '';
     const trail = e < v.length && !/\s/.test(v[e]) ? ' ' : '';
-    const text = lead + links.join('\n') + trail;
-    const caret = s + lead.length + links.join('\n').length;
-    return edit(s, e, text, caret);
+    const body = list.join('\n');
+    return edit(s, e, lead + body + trail, s + lead.length + body.length);
+  }
+
+  // Replace the selection with links to the dropped files.
+  function dropFiles(v, s, e, paths) {
+    return insertSnippets(v, s, e, paths.filter(Boolean).map((p) => fileLink(p)));
+  }
+
+  // Insert a block (table, list…) with a blank line before and after.
+  function insertBlock(v, s, e, text) {
+    const before = v.slice(0, s);
+    const after = v.slice(e);
+    const lead = !before || before.endsWith('\n\n') ? '' : before.endsWith('\n') ? '\n' : '\n\n';
+    const trail = !after ? '\n' : after.startsWith('\n\n') ? '' : after.startsWith('\n') ? '\n' : '\n\n';
+    const body = lead + text + trail;
+    return edit(s, e, body, s + body.length);
+  }
+
+  // ---------- images ----------
+  const IMAGE_EXT = /\.(png|jpe?g|gif|webp|bmp|svg|tiff?|heic|avif)$/i;
+  const isImageName = (n) => IMAGE_EXT.test(String(n));
+
+  // `![alt](name.png)` — `rel` is a path relative to the note, so spaces etc. are percent-encoded.
+  function imageRef(rel, alt = '') {
+    return `![${escText(alt)}](${encPath(rel)})`;
+  }
+
+  // Name for an image pasted from the clipboard: image-20261013-142530.png
+  function pastedImageName(now, ext) {
+    return `image-${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}.${ext || 'png'}`;
+  }
+
+  // ---------- notes of the same Gantt project ----------
+  const PN_START = '<!-- project-notes -->';
+  const PN_END = '<!-- /project-notes -->';
+  const PN_RE = /<!-- project-notes -->[\s\S]*?<!-- \/project-notes -->/;
+  const whenOf = (n) => (n.start ? (n.end && n.end !== n.start ? `${n.start} → ${n.end}` : n.start) : '');
+
+  // The auto-maintained list: { course, notes: [{ label, start, end, rel|path, current }] } → Markdown between markers.
+  function projectNotesBlock(data) {
+    const lines = (data.notes || []).map((n) => {
+      const head = n.current ? `**${escText(n.label)}**` : `[${escText(n.label)}](${n.rel ? encPath(n.rel) : 'file://' + encPath(n.path)})`;
+      const when = whenOf(n);
+      return `- ${head}${when ? ' · ' + when : ''}${n.current ? ' ← this note' : ''}`;
+    });
+    return [PN_START, `**Notes in this project${data.course ? ' — ' + escText(data.course) : ''}**`, '', ...lines, PN_END].join('\n');
+  }
+
+  const hasProjectNotes = (v) => PN_RE.test(v);
+
+  // The list (and the blank lines around it) removed; v unchanged when there is none.
+  const stripProjectNotes = (v) => v.replace(/\n*<!-- project-notes -->[\s\S]*?<!-- \/project-notes -->\n*/, (m, at) => (at === 0 ? '' : '\n\n')).replace(/(\S)\n{2,}$/, '$1\n');
+
+  // Refresh the list in place; with `insert` the block is appended when the note has none. Returns the new text, or null when nothing changes.
+  function updateProjectNotes(v, data, insert) {
+    const block = projectNotesBlock(data);
+    let out;
+    if (PN_RE.test(v)) out = v.replace(PN_RE, () => block);
+    else if (insert) out = v.replace(/\s*$/, '') + '\n\n' + block + '\n';
+    else return null;
+    return out === v ? null : out;
+  }
+
+  // ---------- Gantt tasks table ----------
+  function statusText(b) {
+    const days = (n) => `${Math.abs(n)} day${Math.abs(n) === 1 ? '' : 's'}`;
+    if (b.status === 'done') return '✅ Done';
+    if (b.status === 'overdue') return `⚠️ Overdue by ${days(b.daysLeft)}`;
+    if (b.status === 'active') return b.daysLeft === 0 ? '🔄 In progress — ends today' : `🔄 In progress — ${days(b.daysLeft)} left`;
+    if (b.status === 'upcoming') return b.daysTo === 0 ? '⏳ Starts today' : `⏳ Starts in ${days(b.daysTo)}`;
+    return '';
+  }
+
+  // Markdown table of a project's blocks (as returned by the main process, with status fields).
+  function ganttTable(blocks) {
+    const cell = (t) => String(t == null ? '' : t).replace(/\|/g, '\\|').replace(/\s*\n\s*/g, ' ');
+    const rows = blocks.map((b) => `| ${cell(b.label)} | ${b.start} | ${b.end} | ${b.totalDays || ''} | ${cell(statusText(b))} |`);
+    return ['| Task | Start | Deadline | Days | Status |', '| --- | --- | --- | ---: | --- |', ...rows].join('\n');
   }
 
   // The target of the Markdown link `[text](target)` that contains position `pos`, or ''.
@@ -347,5 +431,7 @@
     onEnter, onTab, wrap, link, pasteUrl, autoPair, onBackspace, heading,
     slashQuery, filterSlash, applySlash, buildItems, SLASH_ITEMS,
     parseFrontMatter, setGantt, clearGantt, fileLink, dropFiles, linkAt,
+    insertBlock, stripProjectNotes, insertSnippets, imageRef, isImageName, pastedImageName,
+    projectNotesBlock, updateProjectNotes, hasProjectNotes, ganttTable, statusText,
   };
 });

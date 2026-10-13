@@ -1,8 +1,10 @@
-const { app, BrowserWindow, Menu, dialog, ipcMain, shell, nativeTheme } = require('electron');
+const { app, BrowserWindow, Menu, clipboard, dialog, ipcMain, shell, nativeTheme } = require('electron');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const Gantt = require('./gantt');
+const Exporter = require('./export');
+const Importer = require('./import');
 
 const MD_FILTERS = [{ name: 'Markdown', extensions: ['md', 'markdown', 'txt'] }];
 
@@ -113,14 +115,33 @@ function buildMenu() {
           item('Save', 'CmdOrCtrl+S', 'save'),
           item('Save As…', 'CmdOrCtrl+Shift+S', 'save-as'),
           { type: 'separator' },
+          { label: 'Import Word / HTML…', click: () => importDialog() },
+          {
+            label: 'Export',
+            submenu: [item('PDF…', null, 'export-pdf'), item('Word (.docx)…', null, 'export-docx')],
+          },
+          { type: 'separator' },
           item('Link to Gantt Block…', 'CmdOrCtrl+Shift+E', 'gantt'),
           item('Show in Gantt', 'CmdOrCtrl+Shift+G', 'gantt-open'),
           item('Unlink from Gantt', null, 'gantt-unlink'),
+          item('Update Project Notes List', null, 'project-notes'),
           { type: 'separator' },
           { role: 'close' },
         ],
       },
-      { role: 'editMenu' },
+      {
+        label: 'Edit',
+        submenu: [
+          { role: 'undo' },
+          { role: 'redo' },
+          { type: 'separator' },
+          { role: 'cut' },
+          { role: 'copy' },
+          { role: 'paste' },
+          { label: 'Paste as Plain Text', accelerator: 'CmdOrCtrl+Shift+V', click: () => send(focusedState(), 'paste-plain', clipboard.readText()) },
+          { role: 'selectAll' },
+        ],
+      },
       {
         label: 'Format',
         submenu: [
@@ -294,7 +315,7 @@ function createNote({ block, course, label, start, end }) {
   for (let n = 1; ; n++) {
     const file = path.join(dir, base + (n > 1 ? ` ${n}` : '') + '.md');
     if (!fs.existsSync(file)) {
-      fs.writeFileSync(file, Gantt.noteFrontMatter({ block, course, label, start, end }));
+      fs.writeFileSync(file, Gantt.noteFrontMatter({ block, course, label, start, end }) + Gantt.EMPTY_PROJECT_NOTES);
       return file;
     }
     if (Gantt.blockOfText(fs.readFileSync(file, 'utf8')) === block) return file;
@@ -321,19 +342,117 @@ async function handleNoteUrl(q) {
   openFile(file);
 }
 
-ipcMain.handle('gantt:blocks', () => {
-  try {
-    const storage = JSON.parse(fs.readFileSync(ganttStorageFile(), 'utf8'));
-    return { blocks: Gantt.readBlocks(storage, { today: localToday() }) };
-  } catch {
-    return { error: 'no-data' };
-  }
+// opts: { course, all } — every block of one project (course id) instead of just the recent / upcoming ones.
+ipcMain.handle('gantt:blocks', (_e, opts) => {
+  const storage = readGanttStorage();
+  if (!storage) return { error: 'no-data' };
+  const o = opts && typeof opts === 'object' ? opts : {};
+  return { blocks: Gantt.readBlocks(storage, { today: localToday(), all: !!o.all, course: typeof o.course === 'string' ? o.course : '' }) };
+});
+// One block with its live status and project progress (null when Gantt no longer has it).
+ipcMain.handle('gantt:block', (_e, block) => {
+  const storage = readGanttStorage();
+  if (!storage) return { error: 'no-data' };
+  const b = typeof block === 'string' ? Gantt.blockDetail({ block, storage, today: localToday() }) : null;
+  return b ? { block: b } : { error: 'not-found' };
+});
+// The notes of the same project as `block`; `file` is the asking note (links are relative to it).
+ipcMain.handle('gantt:project-notes', (_e, { block, file }) => {
+  if (typeof block !== 'string' || !block) return { error: 'invalid' };
+  if (!readGanttStorage()) return { error: 'no-data' }; // keep the list the note already has
+  const current = typeof file === 'string' && path.isAbsolute(file) ? { block, path: file } : null;
+  return Gantt.projectNotes({ block, storage: readGanttStorage() || {}, notesDir: notesDir(), current });
 });
 ipcMain.handle('gantt:open', (_e, block) => (typeof block === 'string' ? askGantt('open', { block }, true) : { error: 'invalid' }));
 ipcMain.handle('gantt:link', (_e, { block, file }) =>
   typeof block === 'string' && path.isAbsolute(String(file)) ? askGantt('link', { block, path: file }, false) : { error: 'invalid' }
 );
 ipcMain.handle('gantt:unlink', (_e, block) => (typeof block === 'string' ? askGantt('unlink', { block }, false) : { error: 'invalid' }));
+
+// ---------- images pasted / dropped into a note: saved beside the note ----------
+const IMAGE_EXT_RE = /\.(png|jpe?g|gif|webp|bmp|svg|tiff?|heic|avif)$/i;
+const MAX_IMAGE_BYTES = 64 * 1024 * 1024;
+
+ipcMain.handle('image:save', async (e, { name, bytes, srcPath }) => {
+  const st = stateOf(e);
+  if (!st || !st.filePath) return { error: 'unsaved' };
+  const dir = path.dirname(st.filePath);
+  const given = String(name || '');
+  if (!IMAGE_EXT_RE.test(given)) return { error: 'type' };
+  // Already beside the note: just reference it.
+  if (typeof srcPath === 'string' && srcPath && samePath(path.dirname(srcPath), dir) && fs.existsSync(srcPath)) return { name: path.basename(srcPath) };
+  const data = Buffer.from(bytes || []);
+  if (!data.length || data.length > MAX_IMAGE_BYTES) return { error: 'size' };
+  const ext = path.extname(given).toLowerCase();
+  const stem = Gantt.safeName(path.basename(given, path.extname(given)), 60);
+  for (let n = 1; ; n++) {
+    const file = stem + (n > 1 ? ` ${n}` : '') + ext;
+    try {
+      await fs.promises.writeFile(path.join(dir, file), data, { flag: 'wx' });
+      return { name: file };
+    } catch (err) {
+      if (err.code !== 'EEXIST') return { error: 'write' };
+    }
+  }
+});
+
+// ---------- export / import ----------
+async function askExportPath(st, ext, label) {
+  const stem = st.filePath ? path.basename(st.filePath).replace(/\.[^.]+$/, '') : 'Untitled';
+  const dir = st.filePath ? path.dirname(st.filePath) : app.getPath('documents');
+  const r = await dialog.showSaveDialog(st.win, { defaultPath: path.join(dir, stem + '.' + ext), filters: [{ name: label, extensions: [ext] }] });
+  return r.canceled ? null : r.filePath;
+}
+
+const baseDirOf = (st) => (st.filePath ? path.dirname(st.filePath) : undefined);
+
+ipcMain.handle('export:pdf', async (e, { html }) => {
+  const st = stateOf(e);
+  const target = await askExportPath(st, 'pdf', 'PDF');
+  if (!target) return null;
+  try {
+    await fs.promises.writeFile(target, await Exporter.htmlToPdf(String(html || ''), { baseDir: baseDirOf(st) }));
+    return { path: target };
+  } catch (err) {
+    return { error: err.message };
+  }
+});
+
+ipcMain.handle('export:docx', async (e, { markdown, title }) => {
+  const st = stateOf(e);
+  const target = await askExportPath(st, 'docx', 'Word document');
+  if (!target) return null;
+  try {
+    await fs.promises.writeFile(target, await Exporter.markdownToDocx(String(markdown || ''), { baseDir: baseDirOf(st), title }));
+    return { path: target };
+  } catch (err) {
+    return { error: err.message };
+  }
+});
+
+// File → Import Word / HTML…: converts to Markdown, saves it as a new note (images go beside it) and opens it.
+async function importDialog() {
+  const parent = BrowserWindow.getFocusedWindow() || undefined;
+  const pick = await dialog.showOpenDialog(parent, {
+    properties: ['openFile'],
+    filters: [{ name: 'Word / HTML', extensions: ['docx', 'html', 'htm'] }],
+  });
+  if (pick.canceled || !pick.filePaths[0]) return;
+  const src = pick.filePaths[0];
+  const out = await dialog.showSaveDialog(parent, {
+    title: 'Save the imported note as',
+    defaultPath: path.join(path.dirname(src), path.basename(src).replace(/\.[^.]+$/, '') + '.md'),
+    filters: MD_FILTERS,
+  });
+  if (out.canceled || !out.filePath) return;
+  try {
+    const { markdown } = await Importer.convertFile(src, out.filePath);
+    await fs.promises.writeFile(out.filePath, markdown, 'utf8');
+    openFile(out.filePath);
+  } catch (err) {
+    dialog.showErrorBox('Couldn’t import this file', err.message);
+  }
+}
 
 ipcMain.on('doc:state', (e, s) => {
   const st = stateOf(e);

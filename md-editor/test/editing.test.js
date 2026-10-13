@@ -174,3 +174,79 @@ test('linkAt finds the target of the link under the caret', () => {
   assert.strictEqual(E.linkAt(v, 26), '');
   assert.strictEqual(E.linkAt(E.fileLink('/u/a b.pdf'), 3), 'file:///u/a%20b.pdf');
 });
+
+test('image references are relative and percent-encoded; pasted images get a timestamp name', () => {
+  assert.strictEqual(E.imageRef('my pic (1).png', 'a'), '![a](my%20pic%20%281%29.png)');
+  assert.strictEqual(E.imageRef('image.png'), '![](image.png)');
+  assert.strictEqual(E.pastedImageName(new Date(2026, 9, 13, 14, 5, 9), 'png'), 'image-20261013-140509.png');
+  assert.ok(E.isImageName('A.JPG') && E.isImageName('x.webp') && !E.isImageName('x.pdf'));
+});
+
+test('insertSnippets puts one snippet per line with spacing around it', () => {
+  const [v, i] = at('see|');
+  assert.deepStrictEqual(run(v, E.insertSnippets(v, i, i, ['![](a.png)', '![](b.png)'])), ['see ![](a.png)\n![](b.png)|']);
+  assert.strictEqual(E.insertSnippets('x', 0, 0, []), null);
+});
+
+test('insertBlock keeps a blank line before and after', () => {
+  assert.strictEqual(E.insertBlock('ab', 1, 1, 'T').text, '\n\nT\n\n');
+  assert.strictEqual(E.insertBlock('a\n\nb', 3, 3, 'T').text, 'T\n\n');
+  assert.strictEqual(E.insertBlock('', 0, 0, 'T').text, 'T\n');
+});
+
+const PROJECT = {
+  course: 'QTCL',
+  notes: [
+    { label: 'Buổi 1', start: '2026-10-17', end: '2026-10-17', rel: 'b 1.md', current: true },
+    { label: 'Prep: [2]', start: '2026-10-24', end: '2026-10-26', rel: '../x/b2.md' },
+    { label: 'Far', start: '', end: '', path: '/abs/far.md' },
+  ],
+};
+
+test('project notes list: current note bold, others relative links, markers kept', () => {
+  const b = E.projectNotesBlock(PROJECT);
+  assert.strictEqual(
+    b,
+    [
+      '<!-- project-notes -->',
+      '**Notes in this project — QTCL**',
+      '',
+      '- **Buổi 1** · 2026-10-17 ← this note',
+      '- [Prep: \\[2\\]](../x/b2.md) · 2026-10-24 → 2026-10-26',
+      '- [Far](file:///abs/far.md)',
+      '<!-- /project-notes -->',
+    ].join('\n')
+  );
+});
+
+test('updateProjectNotes refreshes in place, appends only on request, and is a no-op when current', () => {
+  const body = '# T\n\ntext\n';
+  assert.strictEqual(E.updateProjectNotes(body, PROJECT, false), null);
+  const added = E.updateProjectNotes(body, PROJECT, true);
+  assert.ok(added.startsWith('# T\n\ntext\n\n<!-- project-notes -->') && added.endsWith('<!-- /project-notes -->\n'));
+  assert.strictEqual(E.updateProjectNotes(added, PROJECT, true), null);
+  const changed = E.updateProjectNotes(added + 'after\n', { ...PROJECT, notes: PROJECT.notes.slice(0, 1) }, false);
+  assert.ok(changed.includes('- **Buổi 1**') && !changed.includes('Far') && changed.endsWith('after\n'));
+  assert.ok(E.hasProjectNotes(added) && !E.hasProjectNotes(body));
+  assert.strictEqual(E.stripProjectNotes(added), '# T\n\ntext\n');
+});
+
+test('gantt tasks table', () => {
+  const t = E.ganttTable([
+    { label: 'A|B', start: '2026-10-01', end: '2026-10-02', totalDays: 2, status: 'active', daysLeft: 1 },
+    { label: 'C', start: '2026-10-01', end: '2026-10-01', totalDays: 1, status: 'done' },
+    { label: 'D', start: '2026-09-01', end: '2026-09-02', totalDays: 2, status: 'overdue', daysLeft: -3 },
+    { label: 'E', start: '2026-11-01', end: '2026-11-02', totalDays: 2, status: 'upcoming', daysTo: 0, daysLeft: 1 },
+  ]).split('\n');
+  assert.strictEqual(t[0], '| Task | Start | Deadline | Days | Status |');
+  assert.strictEqual(t[2], '| A\\|B | 2026-10-01 | 2026-10-02 | 2 | 🔄 In progress — 1 day left |');
+  assert.strictEqual(t[3], '| C | 2026-10-01 | 2026-10-01 | 1 | ✅ Done |');
+  assert.ok(t[4].endsWith('⚠️ Overdue by 3 days |'));
+  assert.ok(t[5].endsWith('⏳ Starts today |'));
+});
+
+test('slash menu offers /ganttblocks and /projectnotes', () => {
+  const keys = E.SLASH_ITEMS.filter((i) => i.action).map((i) => i.key + ':' + i.action);
+  assert.ok(keys.includes('ganttblocks:gantt-table') && keys.includes('projectnotes:project-notes'));
+  assert.deepStrictEqual(E.filterSlash('ganttb').map((i) => i.key), ['ganttblocks']);
+});

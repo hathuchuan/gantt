@@ -22,7 +22,7 @@ const storage = {
 test('block ids, labels and dates mirror the Gantt app', () => {
   const blocks = G.readBlocks(storage);
   const by = (id) => blocks.find((b) => b.id === id);
-  assert.deepStrictEqual(by('c1|macro|0'), { id: 'c1|macro|0', course: 'Quản trị Chiến lược', kind: 'macro', label: 'Đề cương', start: '2026-10-08', end: '2026-10-14', notePath: '' });
+  assert.deepStrictEqual(by('c1|macro|0'), { id: 'c1|macro|0', course: 'Quản trị Chiến lược', kind: 'macro', label: 'Đề cương', start: '2026-10-08', end: '2026-10-14', done: false, notePath: '' });
   assert.strictEqual(by('c1|session_prep|1').label, 'Prep buổi 1: Giới thiệu');
   assert.strictEqual(by('c1|session_prep|1').end, '2026-10-16');
   assert.strictEqual(by('c1|session_teach|1').label, 'Buổi 1: Giới thiệu'); // no "Buổi 1: Buổi 1:"
@@ -77,5 +77,65 @@ test('findNote: given path, saved link, or a note tagged with the block anywhere
   assert.strictEqual(G.findNote({ block: 'c1|session_teach|1', path: '/gone.md', notesDir: root }), one);
   assert.strictEqual(G.findNote({ block: 'c1|session_teach|10', notesDir: root }), ten);
   assert.strictEqual(G.findNote({ block: 'c1|none|9', notesDir: root }), null);
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('block status: done / overdue / active / upcoming with day counts', () => {
+  const b = { start: '2026-10-10', end: '2026-10-19' };
+  assert.deepStrictEqual(G.blockStatus({ ...b, done: true }, '2026-10-01'), { totalDays: 10, status: 'done', percent: 100, daysLeft: 0 });
+  assert.deepStrictEqual(G.blockStatus(b, '2026-10-05'), { totalDays: 10, status: 'upcoming', percent: 0, daysTo: 5, daysLeft: 14 });
+  assert.deepStrictEqual(G.blockStatus(b, '2026-10-14'), { totalDays: 10, status: 'active', percent: 50, daysLeft: 5 });
+  assert.deepStrictEqual(G.blockStatus(b, '2026-10-19'), { totalDays: 10, status: 'active', percent: 100, daysLeft: 0 });
+  assert.deepStrictEqual(G.blockStatus(b, '2026-10-22'), { totalDays: 10, status: 'overdue', percent: 100, daysLeft: -3 });
+  assert.strictEqual(G.blockStatus({ start: '2026-10-17', end: '2026-10-17' }, '2026-10-17').totalDays, 1);
+});
+
+test('done flags come from the Gantt data; readBlocks can filter by course and show everything', () => {
+  const done = JSON.parse(storage.academic_smart_gantt);
+  done[0].macroDone = true;
+  done[0].sessions[0].teachDone = true;
+  const st = { ...storage, academic_smart_gantt: JSON.stringify(done) };
+  const rows = G.readBlocks(st, { today: '2026-10-20', all: true, course: 'c1' });
+  assert.ok(rows.every((r) => r.id.startsWith('c1|')));
+  assert.ok(rows.some((r) => r.id === 'c1|macro|0' && r.done && r.status === 'done'));
+  assert.ok(rows.some((r) => r.id === 'c1|session_teach|1' && r.done));
+  assert.ok(rows.some((r) => r.id === 'c1|session_teach|2' && !r.done && r.status === 'upcoming'));
+  const d = G.blockDetail({ block: 'c1|session_teach|2', storage: st, today: '2026-10-20' });
+  assert.strictEqual(d.courseDone, 2);
+  assert.strictEqual(d.courseTotal, 5);
+  assert.strictEqual(G.blockDetail({ block: 'c1|none|9', storage: st, today: '2026-10-20' }), null);
+});
+
+test('projectNotes: notes of the same project from Gantt links and from front matter, in schedule order', () => {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gantt-proj-'));
+  const dir = path.join(root, 'QTCL');
+  fs.mkdirSync(dir, { recursive: true });
+  const write = (name, block, label, start) => {
+    const f = path.join(dir, name);
+    fs.writeFileSync(f, G.noteFrontMatter({ block, course: 'Quản trị Chiến lược', label, start, end: start }));
+    return f;
+  };
+  const two = write('b2.md', 'c1|session_teach|2', 'Buổi 2: Phân tích', '2026-10-24');
+  const one = write('b1.md', 'c1|session_teach|1', 'Buổi 1: Giới thiệu', '2026-10-17');
+  write('other.md', 'r1|research_submit|1', 'Submit lần 1', '2026-12-01'); // another project
+  const linked = path.join(root, 'elsewhere.md');
+  fs.writeFileSync(linked, 'plain');
+  const st = { ...storage, academic_smart_gantt_notes: JSON.stringify({ 'c1|macro|0': { path: linked } }) };
+
+  const r = G.projectNotes({ block: 'c1|session_teach|1', storage: st, notesDir: root, current: { block: 'c1|session_teach|1', path: one } });
+  assert.strictEqual(r.course, 'Quản trị Chiến lược');
+  assert.deepStrictEqual(r.notes.map((n) => n.block), ['c1|macro|0', 'c1|session_teach|1', 'c1|session_teach|2']);
+  assert.deepStrictEqual(r.notes.map((n) => n.current), [false, true, false]);
+  assert.strictEqual(r.notes[2].path, two);
+  assert.strictEqual(r.notes[2].rel, 'b2.md');
+  assert.strictEqual(r.notes[0].rel, '../elsewhere.md');
+  assert.strictEqual(r.notes[2].label, 'Buổi 2: Phân tích');
+  // a note whose link has not reached Gantt yet is still listed
+  const lone = G.projectNotes({ block: 'zz|eval|0', storage: {}, notesDir: root, current: { block: 'zz|eval|0', path: two } });
+  assert.deepStrictEqual(lone.notes.map((n) => n.block), ['zz|eval|0']);
+  assert.deepStrictEqual(G.projectNotes({ block: '', storage: {} }), { course: '', notes: [] });
   fs.rmSync(root, { recursive: true, force: true });
 });
