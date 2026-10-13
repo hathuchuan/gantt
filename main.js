@@ -1,6 +1,8 @@
 const { app, BrowserWindow, Menu, dialog, ipcMain, shell, nativeTheme } = require('electron');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
+const Gantt = require('./gantt');
 
 const MD_FILTERS = [{ name: 'Markdown', extensions: ['md', 'markdown', 'txt'] }];
 
@@ -85,6 +87,10 @@ function buildMenu() {
           item('Save', 'CmdOrCtrl+S', 'save'),
           item('Save As…', 'CmdOrCtrl+Shift+S', 'save-as'),
           { type: 'separator' },
+          item('Link to Gantt Block…', 'CmdOrCtrl+Shift+E', 'gantt'),
+          item('Show in Gantt', 'CmdOrCtrl+Shift+G', 'gantt-open'),
+          item('Unlink from Gantt', null, 'gantt-unlink'),
+          { type: 'separator' },
           { role: 'close' },
         ],
       },
@@ -101,6 +107,8 @@ function buildMenu() {
           item('Heading 1', 'CmdOrCtrl+1', 'fmt:h1'),
           item('Heading 2', 'CmdOrCtrl+2', 'fmt:h2'),
           item('Heading 3', 'CmdOrCtrl+3', 'fmt:h3'),
+          { type: 'separator' },
+          item('Commands…', null, 'commands'),
         ],
       },
       {
@@ -172,6 +180,117 @@ ipcMain.handle('doc:confirm-discard', async () => {
   return ['save', 'discard', 'cancel'][r.response];
 });
 
+// ---------- custom commands (commands.json in the app data folder) ----------
+const commandsFile = () => path.join(app.getPath('userData'), 'commands.json');
+const COMMANDS_EXAMPLE = {
+  disabled: [],
+  custom: [
+    {
+      key: 'meeting',
+      label: 'Meeting notes',
+      hint: '📝',
+      block: true,
+      text: '## Meeting — {date}\n\n**Attendees:** {cursor}\n\n### Notes\n\n### Action items\n- [ ] ',
+    },
+  ],
+};
+
+function readCommands() {
+  try {
+    const j = JSON.parse(fs.readFileSync(commandsFile(), 'utf8'));
+    return { disabled: Array.isArray(j.disabled) ? j.disabled : [], custom: Array.isArray(j.custom) ? j.custom : [], raw: j };
+  } catch (err) {
+    if (err.code === 'ENOENT') return { disabled: [], custom: [], raw: {} };
+    return { disabled: [], custom: [], raw: null, error: 'commands.json is not valid JSON' };
+  }
+}
+
+ipcMain.handle('commands:load', () => {
+  const { disabled, custom, error } = readCommands();
+  return { disabled, custom, error };
+});
+ipcMain.handle('commands:set-disabled', (_e, disabled) => {
+  const cur = readCommands();
+  if (cur.error) return { error: cur.error };
+  const next = { ...cur.raw, disabled: [...new Set((disabled || []).filter((k) => typeof k === 'string'))] };
+  fs.mkdirSync(path.dirname(commandsFile()), { recursive: true });
+  fs.writeFileSync(commandsFile(), JSON.stringify(next, null, 2) + '\n');
+  return {};
+});
+ipcMain.handle('commands:open-file', async () => {
+  if (!fs.existsSync(commandsFile())) {
+    fs.mkdirSync(path.dirname(commandsFile()), { recursive: true });
+    fs.writeFileSync(commandsFile(), JSON.stringify(COMMANDS_EXAMPLE, null, 2) + '\n');
+  }
+  return shell.openPath(commandsFile());
+});
+
+// ---------- Academic Gantt integration ----------
+// Gantt → note : mdeditor://note?block=…&course=…&label=…&start=…&end=…[&path=…]
+// note → Gantt : academicgantt://open?block=…  |  link?block=…&path=…  |  unlink?block=…
+const settingsFile = () => path.join(app.getPath('userData'), 'settings.json');
+const ganttStorageFile = () => path.join(os.homedir(), 'Library', 'Application Support', 'AcademicGantt', 'storage.json');
+const NOTE_RE = /\.(md|markdown|txt)$/i;
+
+function notesDir() {
+  try {
+    const j = JSON.parse(fs.readFileSync(settingsFile(), 'utf8'));
+    if (typeof j.notesDir === 'string' && j.notesDir) return j.notesDir.replace(/^~(?=$|\/)/, os.homedir());
+  } catch {}
+  return path.join(os.homedir(), 'Documents', 'Gantt Notes');
+}
+
+const localToday = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
+const askGantt = (action, params, activate) =>
+  shell
+    .openExternal(`academicgantt://${action}?` + Object.entries(params).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&'), { activate })
+    .then(() => ({}), () => ({ error: 'no-gantt' }));
+
+// Creates the note for a block (or reuses the one already tagged with the same block id).
+function createNote({ block, course, label, start, end }) {
+  const dir = path.join(notesDir(), Gantt.safeName(course));
+  fs.mkdirSync(dir, { recursive: true });
+  const base = Gantt.safeName(label || block);
+  for (let n = 1; ; n++) {
+    const file = path.join(dir, base + (n > 1 ? ` ${n}` : '') + '.md');
+    if (!fs.existsSync(file)) {
+      fs.writeFileSync(file, Gantt.noteFrontMatter({ block, course, label, start, end }));
+      return file;
+    }
+    if (fs.readFileSync(file, 'utf8').includes(`gantt-block: ${block}`)) return file;
+  }
+}
+
+async function handleNoteUrl(q) {
+  const block = q.get('block');
+  if (!block) return;
+  const existing = q.get('path');
+  let file = existing && path.isAbsolute(existing) && NOTE_RE.test(existing) && fs.existsSync(existing) ? existing : null;
+  if (!file) {
+    file = createNote({ block, course: q.get('course') || 'Gantt', label: q.get('label') || '', start: q.get('start'), end: q.get('end') });
+    askGantt('link', { block, path: file }, false); // runs in the background: don't steal focus from the editor
+  }
+  requestOpen(file);
+}
+
+ipcMain.handle('gantt:blocks', () => {
+  try {
+    const storage = JSON.parse(fs.readFileSync(ganttStorageFile(), 'utf8'));
+    return { blocks: Gantt.readBlocks(storage, { today: localToday() }) };
+  } catch {
+    return { error: 'no-data' };
+  }
+});
+ipcMain.handle('gantt:open', (_e, block) => (typeof block === 'string' ? askGantt('open', { block }, true) : { error: 'invalid' }));
+ipcMain.handle('gantt:link', (_e, { block, file }) =>
+  typeof block === 'string' && path.isAbsolute(String(file)) ? askGantt('link', { block, path: file }, false) : { error: 'invalid' }
+);
+ipcMain.handle('gantt:unlink', (_e, block) => (typeof block === 'string' ? askGantt('unlink', { block }, false) : { error: 'invalid' }));
+
 ipcMain.on('doc:state', (_e, s) => {
   dirty = !!s.dirty;
   if (!win) return;
@@ -195,10 +314,28 @@ ipcMain.on('shell:open', (_e, url) => {
   } catch {}
 });
 
-app.on('open-file', (e, p) => {
-  e.preventDefault();
+function requestOpen(p) {
   if (win) send('open-path', p);
   else pendingOpen = p;
+}
+
+app.on('open-file', (e, p) => {
+  e.preventDefault();
+  requestOpen(p);
+});
+
+// mdeditor://note?... (from Academic Gantt) and mdeditor://open?path=/abs/note.md
+app.on('open-url', (e, url) => {
+  e.preventDefault();
+  try {
+    const u = new URL(url);
+    if (u.protocol !== 'mdeditor:') return;
+    if (u.hostname === 'note') app.whenReady().then(() => handleNoteUrl(u.searchParams));
+    else if (u.hostname === 'open') {
+      const p = u.searchParams.get('path');
+      if (p && path.isAbsolute(p) && NOTE_RE.test(p)) requestOpen(p);
+    }
+  } catch {}
 });
 
 app.whenReady().then(() => {
