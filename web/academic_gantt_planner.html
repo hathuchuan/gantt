@@ -1260,7 +1260,7 @@
           <!-- TAB 4: ĐỒNG BỘ MAC CALENDAR -->
           <div id="tabContentMac" class="tab-content">
             <div class="sample-box" style="margin-bottom: 10px; line-height: 1.45;">
-              🍎 Tự động bóc tách môn học, địa điểm & giờ học từ Apple Calendar.<br>
+              <span id="macSyncIntro">🍎 Tự động bóc tách môn học, địa điểm & giờ học từ Apple Calendar.</span><br>
               🔒 <strong>Bảo toàn ID & Ghi chú:</strong> Đổi tên hay chỉnh sửa địa điểm, giờ học sẽ được giữ nguyên khi đồng bộ lại.<br>
               <span id="macSyncSource" style="color:#059669; font-weight:600;">✓ Dịch vụ ngầm: http://127.0.0.1:8765</span>
             </div>
@@ -1271,7 +1271,7 @@
               </div>
               <div id="macCalendarList" class="mac-cal-list"></div>
             </div>
-            <button type="button" class="btn btn-primary" style="width: 100%;" onclick="syncFromMacCalendar()">🔄 Kéo Lịch Từ Apple Calendar</button>
+            <button type="button" id="macSyncButton" class="btn btn-primary" style="width: 100%;" onclick="syncFromMacCalendar()">🔄 Kéo Lịch Từ Apple Calendar</button>
           </div>
         </div>
 
@@ -1858,7 +1858,7 @@
       if (!st || st.at === null || st.at === undefined) {
         el.className = 'save-status';
         el.textContent = '💾 Dữ liệu lưu trên máy';
-        el.title = 'Dữ liệu được lưu tự động vào thư mục Application Support/AcademicGantt (menu Tệp → Mở thư mục dữ liệu).';
+        el.title = 'Dữ liệu được lưu tự động vào thư mục ' + (isWindowsApp() ? '%LOCALAPPDATA%\\AcademicGantt' : 'Application Support/AcademicGantt') + ' (menu Tệp → Mở thư mục dữ liệu).';
       } else if (st.ok) {
         var d = new Date(st.at);
         el.className = 'save-status ok';
@@ -3455,6 +3455,15 @@
   var MAC_CAL_DEFAULT_KEYWORDS = ['FSB', 'RMIT', 'Outlook', 'Calendar', 'Lịch', 'Work'];
   var macCalendars = null;
 
+  function isWindowsApp() {
+    return !!(window.GanttNative && window.GanttNative.platform === 'windows-app');
+  }
+
+  // Tên ứng dụng lịch hiển thị cho người dùng: Windows (Lịch / Outlook) hoặc macOS (Apple Calendar).
+  function calendarAppName() {
+    return isWindowsApp() ? 'Lịch Windows / Outlook' : 'Apple Calendar';
+  }
+
   function hasNativeCalendar() {
     return !!(window.GanttNative && typeof window.GanttNative.fetchEvents === 'function');
   }
@@ -3496,7 +3505,7 @@
     var listEl = document.getElementById('macCalendarList');
     if (!listEl) return;
     if (!macCalendars || macCalendars.length === 0) {
-      listEl.innerHTML = '<div class="mac-cal-empty">Không tìm thấy lịch nào trong ứng dụng Lịch (Calendar).</div>';
+      listEl.innerHTML = '<div class="mac-cal-empty">Không tìm thấy lịch nào trong ' + (isWindowsApp() ? 'ứng dụng Lịch (Calendar) hay Outlook trên máy này. Bạn vẫn có thể nhập tệp .ics.' : 'ứng dụng Lịch (Calendar).') + '</div>';
       return;
     }
     var saved = getSavedMacCalendarIds();
@@ -3539,7 +3548,19 @@
   function initMacSyncPanel() {
     if (!hasNativeCalendar()) return;
     var sourceEl = document.getElementById('macSyncSource');
-    if (sourceEl) sourceEl.textContent = '✓ Ứng dụng macOS: đọc trực tiếp Apple Calendar (không cần sync_server)';
+    if (sourceEl) {
+      sourceEl.textContent = isWindowsApp()
+        ? '✓ Ứng dụng Windows: đọc trực tiếp ứng dụng Lịch (Calendar) và Outlook trên máy này'
+        : '✓ Ứng dụng macOS: đọc trực tiếp Apple Calendar (không cần sync_server)';
+    }
+    if (isWindowsApp()) {
+      var tabBtn = document.getElementById('tabBtnMac');
+      if (tabBtn) tabBtn.textContent = '📅 Đồng Bộ Lịch Windows';
+      var intro = document.getElementById('macSyncIntro');
+      if (intro) intro.textContent = '📅 Tự động bóc tách môn học, địa điểm & giờ học từ ứng dụng Lịch (Calendar) / Outlook trên Windows.';
+      var syncBtn = document.getElementById('macSyncButton');
+      if (syncBtn) syncBtn.textContent = '🔄 Kéo Lịch Từ Lịch Windows / Outlook';
+    }
     var picker = document.getElementById('macCalendarPicker');
     if (picker) picker.style.display = '';
   }
@@ -3564,7 +3585,7 @@
             window.GanttNative.openCalendarPrivacySettings();
           }
         } else {
-          alert('Không đọc được Apple Calendar:\n' + (e && e.message ? e.message : e));
+          alert('Không đọc được ' + calendarAppName() + ':\n' + (e && e.message ? e.message : e));
         }
         return null;
       }
@@ -3583,7 +3604,7 @@
     var rawEvents = await fetchMacCalendarEvents();
     if (rawEvents === null) return;
     if (!rawEvents || rawEvents.length === 0) {
-      alert('Không tìm thấy sự kiện nào từ hôm nay trên Apple Calendar.');
+      alert('Không tìm thấy sự kiện nào từ hôm nay trên ' + calendarAppName() + '.');
       return;
     }
     try {
@@ -3592,7 +3613,7 @@
       if (isNaN(macroDays)) macroDays = 7;
       var stats = groupAndCreateCourses(rawEvents, hasEval, macroDays, true);
       alert(
-        'Đồng bộ từ Apple Calendar hoàn tất!\n' +
+        'Đồng bộ từ ' + calendarAppName() + ' hoàn tất!\n' +
         '• Dự án thêm mới: ' + stats.added + '\n' +
         '• Dự án đã có (giữ nguyên tên, địa điểm, giờ học & ghi chú đã sửa): ' + stats.updated + '\n' +
         '• Dự án đã xóa bị chặn tải lại: ' + stats.blocked

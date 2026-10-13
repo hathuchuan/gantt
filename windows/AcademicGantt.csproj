@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AppVersion Condition="'$(AppVersion)' == ''">3.1.1</AppVersion>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>AcademicGantt</AssemblyName>
+    <RootNamespace>AcademicGantt</RootNamespace>
+    <ApplicationIcon>app.ico</ApplicationIcon>
+    <Version>$(AppVersion)</Version>
+    <AssemblyVersion>$(AppVersion).0</AssemblyVersion>
+    <FileVersion>$(AppVersion).0</FileVersion>
+    <InformationalVersion>$(AppVersion)</InformationalVersion>
+    <Product>Academic Gantt</Product>
+    <Company>hathuchuan</Company>
+    <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
+
+    <!-- Một tệp .exe duy nhất, tự chứa .NET: tải về là chạy, không cần cài gì thêm. -->
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <PublishTrimmed>false</PublishTrimmed>
+    <DebugType>none</DebugType>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2592.51" />
+    <EmbeddedResource Include="Resources\bridge.js" LogicalName="bridge.js" />
+    <EmbeddedResource Include="..\web\academic_gantt_planner.html" LogicalName="index.html" />
+  </ItemGroup>
+
+</Project>

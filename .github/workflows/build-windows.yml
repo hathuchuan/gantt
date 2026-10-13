@@ -1,0 +1,73 @@
+name: Build Windows app
+
+on:
+  push:
+    branches: ['**']
+    paths-ignore: ['**.md', 'macos/**']
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Build AcademicGantt.exe (một tệp, tự chứa .NET)
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          $version = '3.1.1'
+          if ($env:RELEASE_TAG) { $version = $env:RELEASE_TAG.TrimStart('v') }
+          dotnet publish windows/AcademicGantt.csproj -c Release -p:AppVersion=$version -o windows/build
+          Get-ChildItem windows/build | Format-Table Name, Length
+          if (-not (Test-Path windows/build/AcademicGantt.exe)) { throw 'Không thấy AcademicGantt.exe' }
+          Move-Item windows/build/AcademicGantt.exe "windows/build/AcademicGantt-$version-win-x64.exe"
+          "VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Bảo đảm có WebView2 Runtime
+        shell: pwsh
+        run: |
+          $keys = 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}',
+                  'HKLM:\SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}'
+          if ($keys | Where-Object { Test-Path $_ }) { Write-Host 'WebView2 Runtime đã có'; exit 0 }
+          Invoke-WebRequest 'https://go.microsoft.com/fwlink/p/?LinkId=2124703' -OutFile "$env:RUNNER_TEMP\wv2.exe"
+          Start-Process "$env:RUNNER_TEMP\wv2.exe" -ArgumentList '/silent /install' -Wait
+
+      - name: Self-test (mở app, kiểm tra cầu nối JS, ghi dữ liệu, sao lưu, nhật ký, đọc lịch)
+        timeout-minutes: 5
+        shell: pwsh
+        run: |
+          $exe = (Resolve-Path windows/build/AcademicGantt-*-win-x64.exe).Path
+          $dir = Join-Path $env:RUNNER_TEMP 'selftest'
+          $p = Start-Process $exe -ArgumentList '--self-test','--data-dir',$dir -PassThru
+          if (-not $p.WaitForExit(120000)) { Stop-Process -Id $p.Id -Force; Get-Content "$dir\app.log" -ErrorAction SilentlyContinue; throw 'self-test quá thời gian' }
+          Get-Content "$dir\selftest-result.txt" -ErrorAction SilentlyContinue
+          Get-Content "$dir\app.log" -ErrorAction SilentlyContinue
+          if ($p.ExitCode -ne 0) { throw "self-test thất bại (exit $($p.ExitCode))" }
+
+      - name: Kiểm thử tắt / mở lại app (đóng cửa sổ, kill, tải lại trang, tệp hỏng)
+        timeout-minutes: 15
+        shell: pwsh
+        run: ./windows/tests/persist.ps1 -Exe (Resolve-Path windows/build/AcademicGantt-*-win-x64.exe).Path
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AcademicGantt-Windows
+          path: windows/build/AcademicGantt-*-win-x64.exe
+          if-no-files-found: error
+
+      - name: Đính kèm .exe vào Release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: windows/build/AcademicGantt-*-win-x64.exe
