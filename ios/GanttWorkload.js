@@ -8,10 +8,11 @@ const SCRIPT_NAME = Script.name();
 const STAGES = {
   macro: { label: "Đề cương", color: "#a78bfa" },
   prep: { label: "Soạn bài", color: "#fb923c" },
-  teach: { label: "Dạy", color: "#60a5fa" },
+  teach: { label: "Dạy hôm nay", color: "#60a5fa" },
+  term: { label: "Trong kỳ", color: "#94a3b8" },
   eval: { label: "Chấm thi", color: "#34d399" },
 };
-const ORDER = { macro: 0, prep: 1, teach: 2, eval: 3 };
+const ORDER = { macro: 0, prep: 1, teach: 2, term: 3, eval: 4 };
 
 const fm = FileManager.iCloud();
 const pad = (n) => String(n).padStart(2, "0");
@@ -92,7 +93,9 @@ function workFor(courses, f) {
     }
     if (s.length && f >= s[0].teachDate && f <= s[s.length - 1].teachDate) {
       const d = s.find((x) => x.teachDate === f);
-      items.push({ stage: "teach", name: c.name, detail: d ? `${d.title} · ${timeRange(d.startTime || c.startTime, d.durationHours || c.durationHours)}` : "Đang trong kỳ dạy" });
+      items.push(d
+        ? { stage: "teach", name: c.name, detail: `${d.title} · ${timeRange(d.startTime || c.startTime, d.durationHours || c.durationHours)}` }
+        : { stage: "term", name: c.name, detail: "Đang trong kỳ dạy" });
     }
     const e = c.evaluation;
     if (c.hasEvaluation !== false && e && !e.done && e.start && e.end && f >= e.start && f <= e.end) {
