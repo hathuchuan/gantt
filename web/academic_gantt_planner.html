@@ -47,10 +47,10 @@
       --cat-mba-text: #1d4ed8;
       --cat-mba-border: #93c5fd;
 
-      /* Phân loại: ĐH (Đỏ) */
-      --cat-dh-bg: #fef2f2;
-      --cat-dh-text: #b91c1c;
-      --cat-dh-border: #fca5a5;
+      /* Phân loại: ĐH (Hồng Rose) */
+      --cat-dh-bg: #FFF1F2;
+      --cat-dh-text: #BE123C;
+      --cat-dh-border: #FB7185;
 
       /* Phân loại: Đào tạo DN (Cam) */
       --cat-dn-bg: #fff7ed;
@@ -851,10 +851,10 @@
     .bar-prep-mba   { background: #60a5fa; color: #0f172a; }
     .bar-teach-mba  { background: #1d4ed8; }
 
-    /* ĐH Themes (Đỏ) */
-    .bar-macro-dh   { background: #991b1b; border-left: 3px solid #fecaca; }
-    .bar-prep-dh    { background: #f87171; color: #0f172a; }
-    .bar-teach-dh   { background: #dc2626; }
+    /* ĐH Themes (Hồng Rose) */
+    .bar-macro-dh   { background: #BE123C; border-left: 3px solid #FFF1F2; }
+    .bar-prep-dh    { background: #FDA4AF; color: #0f172a; }
+    .bar-teach-dh   { background: #FB7185; }
 
     /* Doanh nghiệp Themes (Cam) */
     .bar-macro-dn   { background: #9a3412; border-left: 3px solid #fed7aa; }
@@ -1177,7 +1177,7 @@
       --row-even-bg: #111a2e; --row-odd-bg: #15213a; --row-hover-bg: #1e3357;
       --row-completed-bg: #3b1620; --row-completed-hover: #4c1d2a; --row-completed-border: #f87171;
       --cat-mba-bg: #172554; --cat-mba-text: #93c5fd; --cat-mba-border: #1d4ed8;
-      --cat-dh-bg: #450a0a; --cat-dh-text: #fca5a5; --cat-dh-border: #b91c1c;
+      --cat-dh-bg: #4c0519; --cat-dh-text: #FDA4AF; --cat-dh-border: #BE123C;
       --cat-dn-bg: #44210c; --cat-dn-text: #fdba74; --cat-dn-border: #c2410c;
       --cat-nc-bg: #2e1f5a; --cat-nc-text: #c4b5fd; --cat-nc-border: #6d28d9;
       --cat-tv-bg: #0b3a2c; --cat-tv-text: #6ee7b7; --cat-tv-border: #047857;
@@ -1380,7 +1380,7 @@
             <label>Phân loại dự án</label>
             <select id="commonCategory" class="form-control" onchange="handleCategoryModeChange()">
               <option value="Giảng dạy MBA">Giảng dạy MBA (Xanh dương)</option>
-              <option value="Giảng dạy ĐH">Giảng dạy Đại học (Đỏ)</option>
+              <option value="Giảng dạy ĐH">Giảng dạy Đại học (Hồng Rose)</option>
               <option value="Đào tạo DN">Đào tạo Doanh nghiệp (Cam)</option>
               <option value="Nghiên cứu">Nghiên cứu (Đếm ngược Submit)</option>
               <option value="Tư vấn doanh nghiệp">Tư vấn doanh nghiệp (Deadline)</option>
@@ -1531,6 +1531,8 @@
               <div class="mac-cal-empty" id="macAutoSyncHint"></div>
             </div>
             <button type="button" class="btn btn-primary" style="width: 100%;" onclick="syncFromMacCalendar()">🔄 Kéo Lịch Từ Apple Calendar</button>
+            <button type="button" class="btn btn-secondary" style="width: 100%; margin-top: 6px;" onclick="compareWithMacCalendar()" title="Chỉ so sánh, không thay đổi dữ liệu">🔍 So sánh Gantt ↔ Apple Calendar</button>
+            <div id="macCompareResult" class="mac-cal-empty" style="display:none; text-align:left; max-height:320px; overflow:auto;"></div>
           </div>
         </div>
 
@@ -1690,7 +1692,7 @@
           <label>Phân loại</label>
           <select id="editCourseCategory" class="form-control" onchange="handleEditCategorySwitch()">
             <option value="Giảng dạy MBA">Giảng dạy MBA (Xanh dương)</option>
-            <option value="Giảng dạy ĐH">Giảng dạy Đại học (Đỏ)</option>
+            <option value="Giảng dạy ĐH">Giảng dạy Đại học (Hồng Rose)</option>
             <option value="Đào tạo DN">Đào tạo Doanh nghiệp (Cam)</option>
             <option value="Nghiên cứu">Nghiên cứu (Submit lần 1, 2...)</option>
             <option value="Tư vấn doanh nghiệp">Tư vấn doanh nghiệp (Deadline)</option>
@@ -3942,6 +3944,59 @@
     } catch (e) {
       alert('Lỗi khi xử lý dữ liệu lịch: ' + (e && e.message ? e.message : e));
     }
+  }
+
+  // So sánh (chỉ đọc) các buổi giảng từ hôm nay: Gantt vs Apple Calendar. Không sửa dữ liệu.
+  async function compareWithMacCalendar() {
+    var box = document.getElementById('macCompareResult');
+    var rawEvents = await fetchMacCalendarEvents();
+    if (rawEvents === null || !box) return;
+    var today = getTodayStr();
+    var calMap = {};
+    rawEvents.forEach(function(ev) {
+      if (!ev.teachDate || ev.teachDate < today) return;
+      var parsed = splitCourseAndSession(ev.title);
+      var name = applyAccountPrefix(parsed.courseName, getCalendarAccountPrefix(ev));
+      calMap[generateSyncKey(name) + '|' + ev.teachDate] = {
+        name: name, date: ev.teachDate, startTime: ev.startTime || '', location: ev.location || ''
+      };
+    });
+    var ganttMap = {};
+    courses.forEach(function(c) {
+      if (isResearchCourse(c) || isConsultingCourse(c)) return;
+      // Chỉ các dự án có nguồn gốc từ Calendar mới có thể đối chiếu
+      if (!c.syncKey && !c.originalName) return;
+      (c.sessions || []).forEach(function(se) {
+        if (!se.teachDate || se.teachDate < today) return;
+        ganttMap[generateSyncKey(c.name) + '|' + se.teachDate] = { name: c.name, date: se.teachDate, startTime: se.startTime || '', course: c, sess: se };
+      });
+    });
+    var onlyCal = [], onlyGantt = [], diff = [], same = 0;
+    Object.keys(calMap).forEach(function(k) {
+      var cv = calMap[k], g = ganttMap[k];
+      if (!g) { onlyCal.push(cv); return; }
+      var probs = [];
+      if (cv.startTime && g.startTime && cv.startTime !== g.startTime) probs.push('giờ: Gantt ' + g.startTime + ' ≠ Calendar ' + cv.startTime);
+      if (cv.location) {
+        var lp = parseLocationToPreset(cv.location, '', '');
+        if (lp.locationType !== g.sess.locationType || (lp.locationCustom || '') !== (g.sess.locationCustom || '')) {
+          probs.push('địa điểm: Gantt ' + (g.sess.locationCustom || g.sess.locationType || '—') + ' ≠ Calendar ' + cv.location);
+        }
+      }
+      if (probs.length) diff.push({ name: cv.name, date: cv.date, probs: probs }); else same++;
+    });
+    Object.keys(ganttMap).forEach(function(k) { if (!calMap[k]) onlyGantt.push(ganttMap[k]); });
+    var byDate = function(a, b) { return a.date.localeCompare(b.date); };
+    var line = function(x, extra) { return '<li>' + escapeHtml(x.date) + ' — ' + escapeHtml(x.name) + (extra ? ' (' + escapeHtml(extra) + ')' : '') + '</li>'; };
+    var html = '<strong>Từ ' + escapeHtml(today) + ': ' + same + ' buổi khớp</strong>';
+    html += '<div style="margin-top:6px;"><b>📅 Có trên Calendar, thiếu trên Gantt (' + onlyCal.length + ')</b><ul>' +
+      onlyCal.sort(byDate).map(function(x) { return line(x, x.startTime); }).join('') + '</ul></div>';
+    html += '<div><b>📊 Có trên Gantt, không có trên Calendar (' + onlyGantt.length + ')</b><ul>' +
+      onlyGantt.sort(byDate).map(function(x) { return line(x, x.startTime); }).join('') + '</ul></div>';
+    html += '<div><b>⚠️ Khác giờ / địa điểm (' + diff.length + ')</b><ul>' +
+      diff.sort(byDate).map(function(x) { return line(x, x.probs.join('; ')); }).join('') + '</ul></div>';
+    box.innerHTML = html;
+    box.style.display = 'block';
   }
 
   // Lịch lấy từ tài khoản FSB / RMIT: thêm tiền tố "FSB " / "RMIT " vào đầu tên dự án
