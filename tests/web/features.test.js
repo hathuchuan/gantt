@@ -383,7 +383,7 @@ const SETUP_COURSES = `
       var cs = getComputedStyle(document.documentElement);
       return { mba: getComputedStyle(row).color, dh: cs.getPropertyValue('--cat-dh-text').trim(), dn: cs.getPropertyValue('--cat-dn-text').trim(), tv: cs.getPropertyValue('--cat-tv-text').trim(), nc: cs.getPropertyValue('--cat-nc-text').trim() };
     });
-    check('Tên dự án màu theo loại (MBA xanh dương; ĐH đỏ, DN cam, TV xanh lá, NC tím)', colors.mba === 'rgb(29, 78, 216)' && colors.dh === '#b91c1c' && colors.dn === '#c2410c' && colors.tv === '#047857' && colors.nc === '#6d28d9', colors);
+    check('Tên dự án màu theo loại (MBA xanh dương; ĐH hồng rose, DN cam, TV xanh lá, NC tím)', colors.mba === 'rgb(29, 78, 216)' && colors.dh === '#BE123C' && colors.dn === '#c2410c' && colors.tv === '#047857' && colors.nc === '#6d28d9', colors);
 
     const names = await page.evaluate(() => {
       groupAndCreateCourses([
