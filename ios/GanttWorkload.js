@@ -60,9 +60,12 @@ function fullyDone(c) {
     if (diff(x.prepStart, x.teachDate) > 0 && !x.prepDone) return false;
     if (!x.teachDone) return false;
   }
-  if (c.hasEvaluation !== false && c.evaluation && c.evaluation.start && c.evaluation.end) {
-    any = true;
-    if (!c.evaluation.done) return false;
+  if (c.hasEvaluation !== false) {
+    for (const e of [c.evaluation, ...(c.extraEvaluations || [])]) {
+      if (!e || !e.start || !e.end) continue;
+      any = true;
+      if (!e.done) return false;
+    }
   }
   return any;
 }
@@ -94,9 +97,12 @@ function workFor(courses, f) {
       const d = s.find((x) => x.teachDate === f);
       items.push({ stage: "teach", name: c.name, detail: d ? `${d.title} · ${timeRange(d.startTime || c.startTime, d.durationHours || c.durationHours)}` : "Đang trong kỳ dạy" });
     }
-    const e = c.evaluation;
-    if (c.hasEvaluation !== false && e && !e.done && e.start && e.end && f >= e.start && f <= e.end) {
-      items.push({ stage: "eval", name: c.name, detail: `${e.name || "Chấm thi"} → ${vn(e.end).slice(0, 5)}` });
+    if (c.hasEvaluation !== false) {
+      for (const e of [c.evaluation, ...(c.extraEvaluations || [])]) {
+        if (e && !e.done && e.start && e.end && f >= e.start && f <= e.end) {
+          items.push({ stage: "eval", name: c.name, detail: `${e.name || "Chấm thi"} → ${vn(e.end).slice(0, 5)}` });
+        }
+      }
     }
   }
   items.sort((a, b) => ORDER[a.stage] - ORDER[b.stage]);

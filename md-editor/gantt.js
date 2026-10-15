@@ -50,8 +50,11 @@ function courseBlocks(c) {
       }
       add('session_teach', num, label, s.teachDate, s.teachDate, s.teachDone);
     });
-    if (c.hasEvaluation !== false && c.evaluation) {
-      add('eval', 0, c.evaluation.name || 'Chấm thi', c.evaluation.start, c.evaluation.end, c.evaluation.done);
+    if (c.hasEvaluation !== false) {
+      if (c.evaluation) add('eval', 0, c.evaluation.name || 'Chấm thi', c.evaluation.start, c.evaluation.end, c.evaluation.done);
+      (c.extraEvaluations || []).forEach((e, i) => {
+        if (e) add('eval', i + 1, e.name || 'Chấm thi', e.start, e.end, e.done);
+      });
     }
   }
   return out;

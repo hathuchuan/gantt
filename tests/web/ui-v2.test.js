@@ -196,8 +196,8 @@ function nativeMock(events) {
     const storage = { academic_smart_gantt_mac_calendars: JSON.stringify(['c1']) };
     await page.addInitScript(nativeMock(ev) + '\n' + BRIDGE.replace('__GANTT_VERSION__', '"3.2.0"').replace('__GANTT_STORAGE__', JSON.stringify(storage)));
     await page.goto(HTML);
-    await page.waitForFunction(() => courses.some(c => c.name === 'Môn Tự Động'), null, { timeout: 8000 }).catch(() => {});
-    check('Tự cập nhật khi mở app (đã chọn lịch từ trước): thêm dự án mới', await page.evaluate(() => courses.some(c => c.name === 'Môn Tự Động')));
+    await page.waitForFunction(() => courses.some(c => c.name === 'FSB Môn Tự Động'), null, { timeout: 8000 }).catch(() => {});
+    check('Tự cập nhật khi mở app (đã chọn lịch từ trước): thêm dự án mới', await page.evaluate(() => courses.some(c => c.name === 'FSB Môn Tự Động')));
     check('Không hiện hộp thoại khi tự cập nhật', autoDialogs.length === 0, autoDialogs);
     check('Gọi fetchEvents với lịch đã lưu', await page.evaluate(() => window.__msgs.some(m => m.cmd === 'fetchEvents' && m.calendarIds.join() === 'c1')));
     const status = await page.textContent('#macAutoStatus');
@@ -206,20 +206,20 @@ function nativeMock(events) {
 
     // sửa dự án rồi cập nhật lại: không bị ghi đè, không lưu lại khi không có thay đổi
     const saves0 = await page.evaluate(() => window.__msgs.filter(m => m.cmd === 'storageSet' && m.key === 'academic_smart_gantt').length);
-    await page.evaluate(() => { courses.find(c => c.name === 'Môn Tự Động').sessions[0].note = 'giữ lại'; saveData(); });
+    await page.evaluate(() => { courses.find(c => c.name === 'FSB Môn Tự Động').sessions[0].note = 'giữ lại'; saveData(); });
     const saves1 = await page.evaluate(() => window.__msgs.filter(m => m.cmd === 'storageSet' && m.key === 'academic_smart_gantt').length);
     await page.evaluate(() => runMacAutoSync(true));
     await page.waitForTimeout(200);
     const saves2 = await page.evaluate(() => window.__msgs.filter(m => m.cmd === 'storageSet' && m.key === 'academic_smart_gantt').length);
     check('Cập nhật lại không có thay đổi: không ghi dữ liệu', saves2 === saves1, { saves0, saves1, saves2 });
-    check('Ghi chú đã sửa được giữ nguyên', await page.evaluate(() => courses.find(c => c.name === 'Môn Tự Động').sessions[0].note === 'giữ lại'));
+    check('Ghi chú đã sửa được giữ nguyên', await page.evaluate(() => courses.find(c => c.name === 'FSB Môn Tự Động').sessions[0].note === 'giữ lại'));
 
     // sự kiện mới xuất hiện trong Lịch → tự thêm buổi
     const day2 = new Date(Date.now() + 9 * 864e5); const iso2 = day2.getFullYear() + '-' + String(day2.getMonth() + 1).padStart(2, '0') + '-' + String(day2.getDate()).padStart(2, '0');
     await page.evaluate((e) => { window.__events.push(e); }, { title: 'Môn Tự Động (2)', teachDate: iso2, calendar: 'FSB Giảng dạy', location: 'Online', startTime: '09:00', durationHours: 3 });
     await page.evaluate(() => runMacAutoSync(true));
     await page.waitForTimeout(200);
-    check('Sự kiện mới trong Lịch tự được thêm buổi', await page.evaluate(() => courses.find(c => c.name === 'Môn Tự Động').sessions.length === 2));
+    check('Sự kiện mới trong Lịch tự được thêm buổi', await page.evaluate(() => courses.find(c => c.name === 'FSB Môn Tự Động').sessions.length === 2));
 
     // tắt tự cập nhật
     await page.evaluate(() => switchTab('mac'));
