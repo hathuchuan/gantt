@@ -42,30 +42,30 @@
       --row-completed-hover: #fecaca;
       --row-completed-border: #ef4444;
 
-      /* Phân loại: MBA (Tím) */
-      --cat-mba-bg: #f5f3ff;
-      --cat-mba-text: #5b21b6;
-      --cat-mba-border: #c4b5fd;
+      /* Phân loại: MBA (Xanh dương) */
+      --cat-mba-bg: #eff6ff;
+      --cat-mba-text: #1d4ed8;
+      --cat-mba-border: #93c5fd;
 
-      /* Phân loại: ĐH (Xanh lam) */
-      --cat-dh-bg: #f0f9ff;
-      --cat-dh-text: #0369a1;
-      --cat-dh-border: #7dd3fc;
+      /* Phân loại: ĐH (Đỏ) */
+      --cat-dh-bg: #fef2f2;
+      --cat-dh-text: #b91c1c;
+      --cat-dh-border: #fca5a5;
 
-      /* Phân loại: Đào tạo DN (Xanh lục) */
-      --cat-dn-bg: #ecfdf5;
-      --cat-dn-text: #047857;
-      --cat-dn-border: #6ee7b7;
+      /* Phân loại: Đào tạo DN (Cam) */
+      --cat-dn-bg: #fff7ed;
+      --cat-dn-text: #c2410c;
+      --cat-dn-border: #fdba74;
 
-      /* Phân loại: Nghiên cứu (Hồng mận) */
-      --cat-nc-bg: #fdf2f8;
-      --cat-nc-text: #be185d;
-      --cat-nc-border: #f472b6;
+      /* Phân loại: Nghiên cứu (Tím) */
+      --cat-nc-bg: #f5f3ff;
+      --cat-nc-text: #6d28d9;
+      --cat-nc-border: #c4b5fd;
 
-      /* Phân loại: Tư vấn doanh nghiệp (Cam đậm) */
-      --cat-tv-bg: #fff7ed;
-      --cat-tv-text: #c2410c;
-      --cat-tv-border: #fdba74;
+      /* Phân loại: Tư vấn doanh nghiệp (Xanh lá) */
+      --cat-tv-bg: #ecfdf5;
+      --cat-tv-text: #047857;
+      --cat-tv-border: #6ee7b7;
 
       --c-eval: #d97706;
 
@@ -259,14 +259,14 @@
       margin-left: 8px;
     }
     .countdown-badge.research {
-      background: #fdf2f8;
-      color: #be185d;
-      border: 1px solid #f472b6;
+      background: var(--cat-nc-bg);
+      color: var(--cat-nc-text);
+      border: 1px solid var(--cat-nc-border);
     }
     .countdown-badge.consulting {
-      background: #fff7ed;
-      color: #c2410c;
-      border: 1px solid #fdba74;
+      background: var(--cat-tv-bg);
+      color: var(--cat-tv-text);
+      border: 1px solid var(--cat-tv-border);
     }
     .countdown-badge.urgent {
       background: #dc2626;
@@ -299,6 +299,7 @@
     .workload-list li.wl-eval   { color: #047857; }
     .workload-list li.wl-submit { color: #be185d; }
     .workload-list li.wl-deliv  { color: #a16207; }
+    .workload-list li.wl-teach-today { background: #fef08a; color: #713f12; border-radius: 5px; padding: 1px 6px; margin-left: -6px; }
 
     /* Cảnh báo khối công việc quá ngày mà chưa hoàn thành */
     .overdue-box {
@@ -435,12 +436,12 @@
       margin-top: 8px;
     }
     .special-mode-box.research {
-      background: #fdf2f8;
-      border: 1px solid #f472b6;
+      background: var(--cat-nc-bg);
+      border: 1px solid var(--cat-nc-border);
     }
     .special-mode-box.consulting {
-      background: #fff7ed;
-      border: 1px solid #fdba74;
+      background: var(--cat-tv-bg);
+      border: 1px solid var(--cat-tv-border);
     }
     .sub-input-row {
       display: grid;
@@ -846,25 +847,25 @@
     }
 
     /* MBA Themes */
-    .bar-macro-mba  { background: #5b21b6; border-left: 3px solid #ddd6fe; }
-    .bar-prep-mba   { background: #8b5cf6; }
-    .bar-teach-mba  { background: #4c1d95; }
+    .bar-macro-mba  { background: #1e40af; border-left: 3px solid #bfdbfe; }
+    .bar-prep-mba   { background: #60a5fa; color: #0f172a; }
+    .bar-teach-mba  { background: #1d4ed8; }
 
-    /* ĐH Themes */
-    .bar-macro-dh   { background: #0369a1; border-left: 3px solid #bae6fd; }
-    .bar-prep-dh    { background: #38bdf8; color: #0f172a; }
-    .bar-teach-dh   { background: #0284c7; }
+    /* ĐH Themes (Đỏ) */
+    .bar-macro-dh   { background: #991b1b; border-left: 3px solid #fecaca; }
+    .bar-prep-dh    { background: #f87171; color: #0f172a; }
+    .bar-teach-dh   { background: #dc2626; }
 
-    /* Doanh nghiệp Themes */
-    .bar-macro-dn   { background: #065f46; border-left: 3px solid #a7f3d0; }
-    .bar-prep-dn    { background: #34d399; color: #0f172a; }
-    .bar-teach-dn   { background: #059669; }
+    /* Doanh nghiệp Themes (Cam) */
+    .bar-macro-dn   { background: #9a3412; border-left: 3px solid #fed7aa; }
+    .bar-prep-dn    { background: #fb923c; color: #0f172a; }
+    .bar-teach-dn   { background: #ea580c; }
 
-    /* Nghiên cứu */
-    .bar-nc-submit  { background: #be185d; border: 1.5px solid #fbcfe8; }
+    /* Nghiên cứu (Tím) */
+    .bar-nc-submit  { background: #7c3aed; border: 1.5px solid #ddd6fe; }
 
-    /* Tư vấn doanh nghiệp */
-    .bar-tv-deadline { background: #ea580c; border: 1.5px solid #fed7aa; }
+    /* Tư vấn doanh nghiệp (Xanh lá) */
+    .bar-tv-deadline { background: #059669; border: 1.5px solid #a7f3d0; }
 
     .bar-eval { background: var(--c-eval); }
 
@@ -1175,11 +1176,11 @@
       --danger: #f87171; --success: #34d399;
       --row-even-bg: #111a2e; --row-odd-bg: #15213a; --row-hover-bg: #1e3357;
       --row-completed-bg: #3b1620; --row-completed-hover: #4c1d2a; --row-completed-border: #f87171;
-      --cat-mba-bg: #2e1f5a; --cat-mba-text: #ddd6fe; --cat-mba-border: #6d28d9;
-      --cat-dh-bg: #0c2a40; --cat-dh-text: #7dd3fc; --cat-dh-border: #0369a1;
-      --cat-dn-bg: #0b3a2c; --cat-dn-text: #6ee7b7; --cat-dn-border: #047857;
-      --cat-nc-bg: #4a1535; --cat-nc-text: #f9a8d4; --cat-nc-border: #be185d;
-      --cat-tv-bg: #44210c; --cat-tv-text: #fdba74; --cat-tv-border: #c2410c;
+      --cat-mba-bg: #172554; --cat-mba-text: #93c5fd; --cat-mba-border: #1d4ed8;
+      --cat-dh-bg: #450a0a; --cat-dh-text: #fca5a5; --cat-dh-border: #b91c1c;
+      --cat-dn-bg: #44210c; --cat-dn-text: #fdba74; --cat-dn-border: #c2410c;
+      --cat-nc-bg: #2e1f5a; --cat-nc-text: #c4b5fd; --cat-nc-border: #6d28d9;
+      --cat-tv-bg: #0b3a2c; --cat-tv-text: #6ee7b7; --cat-tv-border: #047857;
       --today-bg: rgba(244, 114, 182, 0.22); --today-text: #f9a8d4;
       --teach-today: #22c55e; --teach-today-bg: #0f3a25; --teach-today-hover: #14532d;
       --teach-term: #38bdf8; --teach-term-bg: #0c2d44; --teach-term-hover: #0f3d5c;
@@ -1193,6 +1194,7 @@
     [data-theme="dark"] [style*="color:#5b21b6"] { color: #c4b5fd !important; }
     [data-theme="dark"] [style*="color:#334155"] { color: #cbd5e1 !important; }
     [data-theme="dark"] [style*="color:#0f172a"] { color: var(--text) !important; }
+    [data-theme="dark"] .bar-prep-mba,
     [data-theme="dark"] .bar-prep-dh,
     [data-theme="dark"] .bar-prep-dn { color: #0f172a !important; }
     [data-theme="dark"] .header-title h1 { color: var(--text); }
@@ -1216,8 +1218,6 @@
     [data-theme="dark"] .countdown-sidebar-card { background: var(--bg-card); }
     [data-theme="dark"] .countdown-item { background: #15213a; }
     [data-theme="dark"] .countdown-item.is-completed-item { background: #3b1620; border-color: #7f1d1d; }
-    [data-theme="dark"] .countdown-badge.research { background: #4a1535; color: #f9a8d4; border-color: #be185d; }
-    [data-theme="dark"] .countdown-badge.consulting { background: #44210c; color: #fdba74; border-color: #c2410c; }
     [data-theme="dark"] .countdown-badge.review { background: #3a2c0b; color: #fcd34d; border-color: #92400e; }
     [data-theme="dark"] .countdown-badge.rejected { background: #1b2740; color: #cbd5e1; border-color: #475569; }
     [data-theme="dark"] .workload-list li.wl-macro { color: #c4b5fd; }
@@ -1226,6 +1226,7 @@
     [data-theme="dark"] .workload-list li.wl-eval { color: #6ee7b7; }
     [data-theme="dark"] .workload-list li.wl-submit { color: #f9a8d4; }
     [data-theme="dark"] .workload-list li.wl-deliv { color: #fde047; }
+    [data-theme="dark"] .workload-list li.wl-teach-today { background: #854d0e; color: #fef9c3; }
     [data-theme="dark"] .overdue-box { background: #2d2410; border-color: #92400e; }
     [data-theme="dark"] .overdue-box .overdue-title { color: #fbbf24; }
     [data-theme="dark"] .overdue-late { color: #f87171; }
@@ -1235,8 +1236,6 @@
     [data-theme="dark"] .slider-container,
     [data-theme="dark"] .sample-box { background: #15213a; border-color: var(--border); color: var(--text-muted); }
     [data-theme="dark"] .sample-box:hover { background: #1e3357; color: #93c5fd; }
-    [data-theme="dark"] .special-mode-box.research { background: #3a1229; border-color: #be185d; }
-    [data-theme="dark"] .special-mode-box.consulting { background: #3a1d0b; border-color: #c2410c; }
     [data-theme="dark"] .gantt-section,
     [data-theme="dark"] .toolbar,
     [data-theme="dark"] .gantt-grid-container,
@@ -1317,7 +1316,6 @@
       <button type="button" class="btn btn-secondary" onclick="exportData()">📥 Xuất JSON</button>
       <button type="button" class="btn btn-secondary" onclick="pickImportJson()">📤 Nạp JSON</button>
       <input type="file" id="importJsonFile" accept=".json,application/json" style="display:none" onchange="importJsonData(event)">
-      <button type="button" class="btn btn-danger" onclick="resetSample()">🔄 Khôi Phục Mẫu</button>
     </div>
   </header>
 
@@ -1381,9 +1379,9 @@
           <div class="form-group">
             <label>Phân loại dự án</label>
             <select id="commonCategory" class="form-control" onchange="handleCategoryModeChange()">
-              <option value="Giảng dạy MBA">Giảng dạy MBA (Tím)</option>
-              <option value="Giảng dạy ĐH">Giảng dạy Đại học (Xanh lam)</option>
-              <option value="Đào tạo DN">Đào tạo Doanh nghiệp (Xanh lục)</option>
+              <option value="Giảng dạy MBA">Giảng dạy MBA (Xanh dương)</option>
+              <option value="Giảng dạy ĐH">Giảng dạy Đại học (Đỏ)</option>
+              <option value="Đào tạo DN">Đào tạo Doanh nghiệp (Cam)</option>
               <option value="Nghiên cứu">Nghiên cứu (Đếm ngược Submit)</option>
               <option value="Tư vấn doanh nghiệp">Tư vấn doanh nghiệp (Deadline)</option>
             </select>
@@ -1540,11 +1538,11 @@
         <div id="researchModeContainer" style="display:none;">
           <div class="special-mode-box research">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-              <span style="font-size:12px; font-weight:700; color:#9d174d;">🔬 Các mốc Submit & Ghi chú</span>
+              <span style="font-size:12px; font-weight:700; color:var(--cat-nc-text);">🔬 Các mốc Submit & Ghi chú</span>
               <button type="button" class="btn btn-secondary btn-sm" onclick="addCreationSubmitRow()">➕ Thêm lần Submit</button>
             </div>
             <div id="creationSubmissionsList"></div>
-            <button type="button" class="btn btn-primary" style="width:100%; margin-top:8px; background:#be185d;" onclick="processResearchCreate()">
+            <button type="button" class="btn btn-primary" style="width:100%; margin-top:8px; background:#7c3aed;" onclick="processResearchCreate()">
               🚀 Thêm Dự Án Nghiên Cứu
             </button>
           </div>
@@ -1554,11 +1552,11 @@
         <div id="consultingModeContainer" style="display:none;">
           <div class="special-mode-box consulting">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-              <span style="font-size:12px; font-weight:700; color:#c2410c;">💼 Các mốc Sản phẩm & Ghi chú</span>
+              <span style="font-size:12px; font-weight:700; color:var(--cat-tv-text);">💼 Các mốc Sản phẩm & Ghi chú</span>
               <button type="button" class="btn btn-secondary btn-sm" onclick="addCreationDeliverableRow()">➕ Thêm Deadline</button>
             </div>
             <div id="creationDeliverablesList"></div>
-            <button type="button" class="btn btn-primary" style="width:100%; margin-top:6px; background:#ea580c;" onclick="processConsultingCreate()">
+            <button type="button" class="btn btn-primary" style="width:100%; margin-top:6px; background:#059669;" onclick="processConsultingCreate()">
               🚀 Thêm Dự Án Tư Vấn Doanh Nghiệp
             </button>
           </div>
@@ -1691,9 +1689,9 @@
         <div class="form-group">
           <label>Phân loại</label>
           <select id="editCourseCategory" class="form-control" onchange="handleEditCategorySwitch()">
-            <option value="Giảng dạy MBA">Giảng dạy MBA (Tím)</option>
-            <option value="Giảng dạy ĐH">Giảng dạy Đại học (Xanh lam)</option>
-            <option value="Đào tạo DN">Đào tạo Doanh nghiệp (Xanh lục)</option>
+            <option value="Giảng dạy MBA">Giảng dạy MBA (Xanh dương)</option>
+            <option value="Giảng dạy ĐH">Giảng dạy Đại học (Đỏ)</option>
+            <option value="Đào tạo DN">Đào tạo Doanh nghiệp (Cam)</option>
             <option value="Nghiên cứu">Nghiên cứu (Submit lần 1, 2...)</option>
             <option value="Tư vấn doanh nghiệp">Tư vấn doanh nghiệp (Deadline)</option>
           </select>
@@ -1786,6 +1784,8 @@
             <label>📝 Ghi chú khối Chấm thi / Đánh giá:</label>
             <input type="text" class="form-control" id="editEvalNote" placeholder="VD: Chấm tiểu luận nhóm + nhập điểm..." oninput="liveUpdateFromModal()">
           </div>
+          <div id="editExtraEvalList"></div>
+          <button type="button" class="btn btn-secondary btn-sm" style="margin-top:8px;" onclick="addExtraEvalStage()">➕ Thêm giai đoạn chấm thi</button>
         </div>
       </div>
 
@@ -1854,8 +1854,8 @@
 
     <!-- C. KHỐI EDIT CHO TƯ VẤN DOANH NGHIỆP -->
     <div id="editConsultingContainer" style="display:none;">
-      <div class="modal-section" style="background:#fff7ed; border-color:#fdba74;">
-        <div class="modal-section-title" style="color:#c2410c;">
+      <div class="modal-section" style="background:var(--cat-tv-bg); border-color:var(--cat-tv-border);">
+        <div class="modal-section-title" style="color:var(--cat-tv-text);">
           <span>🏢 Thông tin Khách hàng / Đối tác Tư vấn</span>
         </div>
         <div class="form-group" style="margin-bottom:0;">
@@ -2108,6 +2108,23 @@
     return c && getCategoryTheme(c.category) === 'tv';
   }
 
+  // Các giai đoạn chấm thi: idx 0 = c.evaluation, idx >= 1 = c.extraEvaluations[idx - 1]
+  function getEvalStageByIndex(c, idx) {
+    if (!c) return null;
+    if (!idx) return c.evaluation || null;
+    return (c.extraEvaluations || [])[idx - 1] || null;
+  }
+
+  function getEvalStages(c) {
+    var out = [];
+    if (!c || c.hasEvaluation === false) return out;
+    if (c.evaluation && c.evaluation.start && c.evaluation.end) out.push({ idx: 0, ev: c.evaluation });
+    (c.extraEvaluations || []).forEach(function(ev, i) {
+      if (ev && ev.start && ev.end) out.push({ idx: i + 1, ev: ev });
+    });
+    return out;
+  }
+
   // =========================================================================
   // 2. BỘ NHỚ LƯU VẾT DỰ ÁN ĐÃ XÓA (TOMBSTONE REGISTRY)
   // =========================================================================
@@ -2157,7 +2174,7 @@
     render(native.saveStatus);
   }
 
-  // Sao lưu trạng thái trên đĩa trước một thao tác sẽ thay thế toàn bộ dữ liệu (nạp JSON, khôi phục mẫu).
+  // Sao lưu trạng thái trên đĩa trước một thao tác sẽ thay thế toàn bộ dữ liệu (nạp JSON).
   function backupBeforeReplace(label) {
     try {
       var native = window.GanttNative;
@@ -2294,9 +2311,10 @@
       }
     }
 
-    if (c.hasEvaluation !== false && c.evaluation && c.evaluation.start && c.evaluation.end) {
+    var evStages = getEvalStages(c);
+    for (var ei = 0; ei < evStages.length; ei++) {
       hasAnyBlock = true;
-      if (!c.evaluation.done) return false;
+      if (!evStages[ei].ev.done) return false;
     }
 
     return hasAnyBlock;
@@ -2508,6 +2526,9 @@
           safe.evaluation.done = !!safe.evaluation.done;
           safe.evaluation.note = safe.evaluation.note || "";
         }
+        safe.extraEvaluations = Array.isArray(safe.extraEvaluations) ? safe.extraEvaluations.filter(Boolean).map(function(ev, i) {
+          return { name: ev.name || ('Chấm thi đợt ' + (i + 2)), start: ev.start || "", end: ev.end || "", note: ev.note || "", done: !!ev.done };
+        }) : [];
       }
       return safe;
     });
@@ -3043,8 +3064,10 @@
       return { kind: 'session', date: nextSession.teachDate, minutes: nextSessionMin, item: nextSession };
     }
 
-    if (c.hasEvaluation !== false && c.evaluation && c.evaluation.start && c.evaluation.end && !c.evaluation.done) {
-      return { kind: 'eval', date: c.evaluation.start, minutes: 0, item: c.evaluation };
+    var pendingEval = getEvalStages(c).filter(function(st) { return !st.ev.done; })
+      .sort(function(a, b) { return String(a.ev.start).localeCompare(String(b.ev.start)); })[0];
+    if (pendingEval) {
+      return { kind: 'eval', date: pendingEval.ev.start, minutes: 0, item: pendingEval.ev };
     }
     return null;
   }
@@ -3101,7 +3124,8 @@
     if (barType === 'macro') {
       c.macroDone = !c.macroDone;
     } else if (barType === 'eval') {
-      if (c.evaluation) c.evaluation.done = !c.evaluation.done;
+      var evT = getEvalStageByIndex(c, index);
+      if (evT) evT.done = !evT.done;
     } else if (barType === 'session_prep') {
       if (c.sessions && c.sessions[index]) c.sessions[index].prepDone = !c.sessions[index].prepDone;
     } else if (barType === 'session_teach') {
@@ -3144,6 +3168,7 @@
         });
       }
       if (c.evaluation) c.evaluation.done = targetState;
+      (c.extraEvaluations || []).forEach(function(ev) { ev.done = targetState; });
     }
 
     if (activeCourseId === c.id) populateModalBodyForCourse(c);
@@ -3171,7 +3196,7 @@
       return true;
     });
 
-    var resHtml = '<div class="countdown-group-title" style="color:#be185d;">🔬 Dự Án Nghiên Cứu (' + researchItems.length + ')</div>';
+    var resHtml = '<div class="countdown-group-title" style="color:var(--cat-nc-text);">🔬 Dự Án Nghiên Cứu (' + researchItems.length + ')</div>';
     if (researchItems.length === 0) {
       resHtml += '<div style="font-size:11px; color:var(--text-muted); padding:4px 0;">Không có đề tài nghiên cứu nào đang hiển thị.</div>';
     } else {
@@ -3219,7 +3244,7 @@
     }
     resListEl.innerHTML = resHtml;
 
-    var consHtml = '<div class="countdown-group-title" style="color:#c2410c;">💼 Tư Vấn Doanh Nghiệp (' + consultingItems.length + ')</div>';
+    var consHtml = '<div class="countdown-group-title" style="color:var(--cat-tv-text);">💼 Tư Vấn Doanh Nghiệp (' + consultingItems.length + ')</div>';
     if (consultingItems.length === 0) {
       consHtml += '<div style="font-size:11px; color:var(--text-muted); padding:4px 0;">Không có dự án tư vấn nào đang hiển thị.</div>';
     } else {
@@ -3333,6 +3358,8 @@
           workItems.push({
             stage: 'teach',
             courseName: c.name,
+            teachToday: !!todaySession,
+            sortTime: todaySession ? (todaySession.startTime || c.startTime || '') : '',
             detail: todaySession
               ? ('Dạy ' + todaySession.title + ' · ' + formatTimeRange(todaySession.startTime || c.startTime, todaySession.durationHours || c.durationHours))
               : 'Đang trong kỳ giảng dạy'
@@ -3340,21 +3367,28 @@
         }
       }
 
-      if (c.hasEvaluation !== false && c.evaluation && !c.evaluation.done && c.evaluation.start && c.evaluation.end) {
-        if (focusStr >= c.evaluation.start && focusStr <= c.evaluation.end) {
-          gradingCount++;
-          workItems.push({
-            stage: 'eval',
-            courseName: c.name,
-            detail: (c.evaluation.name || 'Chấm thi') + ' (' + formatVNDate(c.evaluation.start).slice(0, 5) + ' → ' + formatVNDate(c.evaluation.end).slice(0, 5) + ')'
-          });
-        }
-      }
+      var gradingNow = false;
+      getEvalStages(c).forEach(function(st) {
+        var ev = st.ev;
+        if (ev.done || focusStr < ev.start || focusStr > ev.end) return;
+        gradingNow = true;
+        workItems.push({
+          stage: 'eval',
+          courseName: c.name,
+          detail: (ev.name || 'Chấm thi') + ' (' + formatVNDate(ev.start).slice(0, 5) + ' → ' + formatVNDate(ev.end).slice(0, 5) + ')'
+        });
+      });
+      if (gradingNow) gradingCount++;
     });
 
     var prepCount = Object.keys(prepCourseNames).length;
     var stageOrder = { macro: 0, prep: 1, teach: 2, eval: 3 };
-    workItems.sort(function(a, b) { return stageOrder[a.stage] - stageOrder[b.stage]; });
+    // Lớp có buổi giảng trong ngày đang xem: đặt lên trên cùng (theo giờ dạy) và tô vàng
+    workItems.sort(function(a, b) {
+      if (!!a.teachToday !== !!b.teachToday) return a.teachToday ? -1 : 1;
+      if (a.teachToday) return String(a.sortTime).localeCompare(String(b.sortTime));
+      return stageOrder[a.stage] - stageOrder[b.stage];
+    });
 
     document.getElementById('statPrepCourses').textContent = prepCount;
     document.getElementById('statTeachingCourses').textContent = teachingCount;
@@ -3396,7 +3430,7 @@
   function buildWorkListHtml(items, clickable) {
     return '<ol class="workload-list">' + items.map(function(it) {
       var onclick = (clickable && it.courseId) ? ' onclick="openModal(\'' + it.courseId + '\')" title="Nhấp để mở dự án"' : '';
-      return '<li class="wl-' + it.stage + '"' + onclick + '>' +
+      return '<li class="wl-' + it.stage + (it.teachToday ? ' wl-teach-today' : '') + '"' + onclick + '>' +
         '<span class="wl-stage">' + (WORK_STAGE_LABELS[it.stage] || it.stage) + '</span>' +
         '<strong>' + escapeHtml(it.courseName) + '</strong>' +
         (it.detail ? ' <span class="wl-detail">— ' + escapeHtml(it.detail) + '</span>' : '') +
@@ -3431,9 +3465,9 @@
           if (diffDaysRaw(s.prepStart, s.teachDate) > 0 && !s.prepDone) push(c, 'prep', 'Soạn bài ' + title, addDays(s.teachDate, -1));
           if (!s.teachDone) push(c, 'teach', 'Dạy ' + title, s.teachDate);
         });
-        if (c.hasEvaluation !== false && c.evaluation && c.evaluation.start && c.evaluation.end && !c.evaluation.done) {
-          push(c, 'eval', c.evaluation.name || 'Chấm thi', c.evaluation.end);
-        }
+        getEvalStages(c).forEach(function(st) {
+          if (!st.ev.done) push(c, 'eval', st.ev.name || 'Chấm thi', st.ev.end);
+        });
       }
     });
     out.sort(function(a, b) { return String(a.endDate).localeCompare(String(b.endDate)); });
@@ -3910,12 +3944,38 @@
     }
   }
 
+  // Lịch lấy từ tài khoản FSB / RMIT: thêm tiền tố "FSB " / "RMIT " vào đầu tên dự án
+  var CALENDAR_ACCOUNT_PREFIXES = ['FSB', 'RMIT'];
+
+  function getCalendarAccountPrefix(ev) {
+    var hay = normalizeCalName((ev && ev.source || '') + ' ' + (ev && ev.calendar || ''));
+    for (var i = 0; i < CALENDAR_ACCOUNT_PREFIXES.length; i++) {
+      if (hay.indexOf(CALENDAR_ACCOUNT_PREFIXES[i].toLowerCase()) !== -1) return CALENDAR_ACCOUNT_PREFIXES[i];
+    }
+    return '';
+  }
+
+  function hasAccountPrefix(name, prefix) {
+    return new RegExp('^' + prefix + '(\\b|\\s|$)', 'i').test(String(name || '').trim());
+  }
+
+  function applyAccountPrefix(name, prefix) {
+    if (!prefix || hasAccountPrefix(name, prefix)) return name;
+    return prefix + ' ' + name;
+  }
+
   function groupAndCreateCourses(rawEvents, hasEval, macroDays, isFromSyncServer, quiet) {
     var groups = {};
+    var groupMeta = {};
     rawEvents.forEach(function(ev) {
       var parsed = splitCourseAndSession(ev.title);
-      if (!groups[parsed.courseName]) groups[parsed.courseName] = [];
-      groups[parsed.courseName].push({
+      var prefix = getCalendarAccountPrefix(ev);
+      var gName = applyAccountPrefix(parsed.courseName, prefix);
+      if (!groups[gName]) {
+        groups[gName] = [];
+        groupMeta[gName] = { prefix: prefix, rawName: parsed.courseName };
+      }
+      groups[gName].push({
         teachDate: ev.teachDate,
         title: parsed.sessionTitle,
         location: ev.location || "",
@@ -3938,24 +3998,34 @@
 
       var sKey = generateSyncKey(cName);
       var sId = hashSyncId(sKey);
+      var meta = groupMeta[cName] || {};
+      // Dự án đã nhập trước khi có tiền tố FSB/RMIT vẫn được nhận ra theo tên gốc
+      var rawKey = meta.prefix ? generateSyncKey(meta.rawName) : '';
+      var rawId = rawKey ? hashSyncId(rawKey) : '';
 
-      if (isFromSyncServer && isProjectBlockedFromSync(sId, sKey, cName)) {
+      if (isFromSyncServer && (isProjectBlockedFromSync(sId, sKey, cName) || (rawKey && isProjectBlockedFromSync(rawId, rawKey, meta.rawName)))) {
         blockedCount++;
         return;
       }
 
-      var existing = courses.find(function(c) {
+      var matchKey = function(c, id, key) {
         return (
-          c.id === sId ||
-          (c.syncKey && generateSyncKey(c.syncKey) === sKey) ||
-          (c.originalName && generateSyncKey(c.originalName) === sKey) ||
-          generateSyncKey(c.name) === sKey
+          c.id === id ||
+          (c.syncKey && generateSyncKey(c.syncKey) === key) ||
+          (c.originalName && generateSyncKey(c.originalName) === key) ||
+          generateSyncKey(c.name) === key
         );
-      });
+      };
+      var existing = courses.find(function(c) { return matchKey(c, sId, sKey); }) ||
+        (rawKey ? courses.find(function(c) { return matchKey(c, rawId, rawKey); }) : null);
 
       if (existing) {
         existing.syncKey = existing.syncKey || sKey;
         existing.originalName = existing.originalName || cName;
+        if (meta.prefix && !hasAccountPrefix(existing.name, meta.prefix)) {
+          existing.name = applyAccountPrefix(existing.name, meta.prefix);
+          changedCount++;
+        }
 
         if (!isResearchCourse(existing) && !isConsultingCourse(existing)) {
           var existingByDate = {};
@@ -4111,26 +4181,34 @@
     }
 
     var evalLane = 0;
-    if (c.hasEvaluation !== false && c.evaluation && c.evaluation.start && c.evaluation.end) {
-      var evStart = c.evaluation.start;
+    var evalLanes = {};
+    getEvalStages(c).forEach(function(st, k) {
+      var evStart = st.ev.start;
       var foundEvalLane = -1;
       for (var el = 0; el < lanesEnd.length; el++) {
         if (evStart > lanesEnd[el]) {
           foundEvalLane = el;
-          lanesEnd[el] = c.evaluation.end;
+          lanesEnd[el] = st.ev.end;
           break;
         }
       }
       if (foundEvalLane === -1) {
-        foundEvalLane = lanesEnd.length > 0 ? (lanesEnd.length % 2) : 0;
+        if (k === 0) {
+          foundEvalLane = lanesEnd.length > 0 ? (lanesEnd.length % 2) : 0;
+        } else {
+          foundEvalLane = lanesEnd.length;
+          lanesEnd.push(st.ev.end);
+        }
       }
-      evalLane = foundEvalLane;
-    }
+      evalLanes[st.idx] = foundEvalLane;
+      if (k === 0) evalLane = foundEvalLane;
+    });
 
     var totalLanesUsed = Math.max(2, lanesEnd.length);
     return {
       sessionLanes: sessionLanes,
       evalLane: evalLane,
+      evalLanes: evalLanes,
       hasOverlap: lanesEnd.length > 1,
       totalLanes: totalLanesUsed
     };
@@ -4349,7 +4427,7 @@
           } else if (nextInfo && nextInfo.sub) {
             var sTitle = nextInfo.sub.title || ('Submit lần ' + nextInfo.sub.num);
             if (nextInfo.daysLeft > 0) {
-              subInfo = '<strong style="color:#be185d;">⏳ Còn ' + nextInfo.daysLeft + ' ngày → ' + escapeHtml(sTitle) + '</strong>';
+              subInfo = '<strong>⏳ Còn ' + nextInfo.daysLeft + ' ngày → ' + escapeHtml(sTitle) + '</strong>';
             } else if (nextInfo.daysLeft === 0) {
               subInfo = '<strong style="color:#b91c1c;">🔥 Hôm nay: ' + escapeHtml(sTitle) + '</strong>';
             } else {
@@ -4364,7 +4442,7 @@
           } else if (nextDelivInfo && nextDelivInfo.deliv) {
             var dTitle = nextDelivInfo.deliv.title || ('Sản phẩm ' + nextDelivInfo.deliv.num);
             if (nextDelivInfo.daysLeft > 0) {
-              subInfo = '<strong style="color:#c2410c;">⏳ Còn ' + nextDelivInfo.daysLeft + ' ngày → ' + escapeHtml(dTitle) + '</strong>';
+              subInfo = '<strong>⏳ Còn ' + nextDelivInfo.daysLeft + ' ngày → ' + escapeHtml(dTitle) + '</strong>';
             } else if (nextDelivInfo.daysLeft === 0) {
               subInfo = '<strong style="color:#b91c1c;">🔥 Hôm nay: ' + escapeHtml(dTitle) + '</strong>';
             } else {
@@ -4379,9 +4457,9 @@
           var nextPendingHtml = '';
           if (nextPending && nextPending.kind === 'session') {
             var nextStartTime = nextPending.item.startTime || c.startTime || "18:00";
-            nextPendingHtml = '<strong style="color:#1d4ed8;">⏭ B' + escapeHtml(String(nextPending.item.num)) + ' · ' + getDayNameVN(nextPending.date) + ' ' + formatVNDate(nextPending.date).slice(0, 5) + ' · ' + escapeHtml(nextStartTime) + '</strong> • ';
+            nextPendingHtml = '<strong>⏭ B' + escapeHtml(String(nextPending.item.num)) + ' · ' + getDayNameVN(nextPending.date) + ' ' + formatVNDate(nextPending.date).slice(0, 5) + ' · ' + escapeHtml(nextStartTime) + '</strong> • ';
           } else if (nextPending && nextPending.kind === 'eval') {
-            nextPendingHtml = '<strong style="color:#1d4ed8;">⏭ Chấm thi từ ' + formatVNDate(nextPending.date).slice(0, 5) + '</strong> • ';
+            nextPendingHtml = '<strong>⏭ ' + escapeHtml(nextPending.item.name || 'Chấm thi') + ' từ ' + formatVNDate(nextPending.date).slice(0, 5) + '</strong> • ';
           }
           subInfo = nextPendingHtml + '📍 <strong>' + escapeHtml(locDisplay) + '</strong> • 🕒 ' + escapeHtml(timeDisplay) + ' • ' + c.sessions.length + ' buổi';
         }
@@ -4418,8 +4496,8 @@
               completedTagHtml +
               teachTagHtml +
             '</div>' +
-            '<strong style="font-size:12px; color:' + (isCompleted ? 'var(--completed-text)' : 'var(--text)') + ';" title="' + escapeHtml(c.name) + '">' + escapeHtml(c.name) + '</strong>' +
-            '<div style="font-size:10px; color:var(--text-muted);">' + subInfo + '</div>' +
+            '<strong style="font-size:12px; color:' + (isCompleted ? 'var(--completed-text)' : 'var(--cat-' + theme + '-text)') + ';" title="' + escapeHtml(c.name) + '">' + escapeHtml(c.name) + '</strong>' +
+            '<div style="font-size:10px; color:' + (isCompleted ? 'var(--text-muted)' : 'var(--cat-' + theme + '-text)') + ';">' + subInfo + '</div>' +
           '</div>';
 
         var editBtn = document.createElement('button');
@@ -4484,10 +4562,10 @@
             });
           }
 
-          if (c.hasEvaluation !== false && c.evaluation && c.evaluation.start && c.evaluation.end) {
-            var evLane = (lanePlan && lanePlan.evalLane !== undefined) ? lanePlan.evalLane : 0;
-            drawDayBar(canvas, c.evaluation.start, c.evaluation.end, startDate, 'bar-eval', c.evaluation.name || 'Chấm thi', c.name, !!c.evaluation.done, evLane, c.evaluation.note || '', null, barHandler(c, 'eval', 0));
-          }
+          getEvalStages(c).forEach(function(st) {
+            var evLane = (lanePlan && lanePlan.evalLanes && lanePlan.evalLanes[st.idx] !== undefined) ? lanePlan.evalLanes[st.idx] : ((lanePlan && lanePlan.evalLane !== undefined) ? lanePlan.evalLane : 0);
+            drawDayBar(canvas, st.ev.start, st.ev.end, startDate, 'bar-eval', st.ev.name || 'Chấm thi', c.name, !!st.ev.done, evLane, st.ev.note || '', null, barHandler(c, 'eval', st.idx));
+          });
         }
 
         timelineRow.appendChild(canvas);
@@ -4646,7 +4724,8 @@
       label = 'Đề cương';
       if (macro) { start = macro.start; end = addDays(macro.end, -1); }
     } else if (kind === 'eval') {
-      var ev = c.evaluation || {};
+      var ev = getEvalStageByIndex(c, idx) || {};
+      num = idx || 0;
       label = ev.name || 'Chấm thi';
       start = ev.start || '';
       end = ev.end || '';
@@ -4955,6 +5034,7 @@
         document.getElementById('editEvalDone').checked = !!c.evaluation.done;
         document.getElementById('editEvalNote').value = c.evaluation.note || "";
       }
+      renderExtraEvalList(c);
       renderModalSessionsList(c.sessions);
     }
   }
@@ -5355,6 +5435,57 @@
     renderGantt();
   }
 
+  // Các giai đoạn chấm thi bổ sung (giữa kỳ, cuối kỳ, chấm lại/phúc khảo...)
+  function renderExtraEvalList(c) {
+    var box = document.getElementById('editExtraEvalList');
+    if (!box) return;
+    var list = (c && c.extraEvaluations) || [];
+    box.innerHTML = list.map(function(ev, i) {
+      return '<div class="extra-eval-row" style="margin-top:10px; padding-top:8px; border-top:1px dashed #cbd5e1;">' +
+        '<div style="display:flex; gap:6px; align-items:center; margin-bottom:6px;">' +
+          '<input type="text" class="form-control" style="font-weight:700;" value="' + escapeHtml(ev.name || '') + '" placeholder="Tên giai đoạn" oninput="updateExtraEvalStage(' + i + ', \'name\', this.value)">' +
+          '<label style="display:flex; align-items:center; gap:4px; color:#059669; white-space:nowrap; font-size:12px;"><input type="checkbox"' + (ev.done ? ' checked' : '') + ' onchange="updateExtraEvalStage(' + i + ', \'done\', this.checked)"> Đã chấm xong</label>' +
+          '<button type="button" class="btn btn-danger btn-sm" title="Xóa giai đoạn này" onclick="removeExtraEvalStage(' + i + ')">✕</button>' +
+        '</div>' +
+        '<div class="form-row">' +
+          '<div class="form-group"><label>Bắt đầu</label><input type="date" class="form-control" value="' + escapeHtml(ev.start || '') + '" oninput="updateExtraEvalStage(' + i + ', \'start\', this.value)"></div>' +
+          '<div class="form-group"><label>Kết thúc</label><input type="date" class="form-control" value="' + escapeHtml(ev.end || '') + '" oninput="updateExtraEvalStage(' + i + ', \'end\', this.value)"></div>' +
+        '</div>' +
+        '<input type="text" class="form-control" value="' + escapeHtml(ev.note || '') + '" placeholder="📝 Ghi chú giai đoạn này" oninput="updateExtraEvalStage(' + i + ', \'note\', this.value)">' +
+      '</div>';
+    }).join('');
+  }
+
+  function addExtraEvalStage() {
+    var c = courses.find(function(item) { return item.id === activeCourseId; });
+    if (!c) return;
+    if (!Array.isArray(c.extraEvaluations)) c.extraEvaluations = [];
+    var stages = [c.evaluation].concat(c.extraEvaluations).filter(function(ev) { return ev && ev.end; });
+    var lastEnd = stages.length ? stages.map(function(ev) { return ev.end; }).sort().pop() : getTodayStr();
+    var start = addDays(lastEnd, 1);
+    c.extraEvaluations.push({ name: 'Chấm thi đợt ' + (c.extraEvaluations.length + 2), start: start, end: addDays(start, 6), note: '', done: false });
+    renderExtraEvalList(c);
+    saveData();
+    renderGantt();
+  }
+
+  function updateExtraEvalStage(i, field, value) {
+    var c = courses.find(function(item) { return item.id === activeCourseId; });
+    if (!c || !c.extraEvaluations || !c.extraEvaluations[i]) return;
+    c.extraEvaluations[i][field] = field === 'done' ? !!value : value;
+    saveData();
+    renderGantt();
+  }
+
+  function removeExtraEvalStage(i) {
+    var c = courses.find(function(item) { return item.id === activeCourseId; });
+    if (!c || !c.extraEvaluations) return;
+    c.extraEvaluations.splice(i, 1);
+    renderExtraEvalList(c);
+    saveData();
+    renderGantt();
+  }
+
   function deleteCourse() {
     deleteCourseById(activeCourseId);
   }
@@ -5378,15 +5509,6 @@
 
   function saveData() {
     writeStored('academic_smart_gantt', JSON.stringify(courses));
-  }
-
-  function resetSample() {
-    if (confirm('Khôi phục lại dữ liệu mẫu ban đầu?')) {
-      backupBeforeReplace('reset');
-      courses = normalizeCourses(SAMPLE_DATA);
-      saveData();
-      renderGantt();
-    }
   }
 
   function exportData() {
@@ -5636,9 +5758,9 @@
         add('session_teach', i, 'teach', title, s.teachDate, s.teachDate, s.teachDone,
           formatTimeRange(s.startTime || c.startTime, s.durationHours || c.durationHours) + ' · ' + loc);
       });
-      if (c.hasEvaluation !== false && c.evaluation && c.evaluation.start && c.evaluation.end) {
-        add('eval', 0, 'eval', c.evaluation.name || 'Chấm thi', c.evaluation.start, c.evaluation.end, c.evaluation.done, c.evaluation.note);
-      }
+      getEvalStages(c).forEach(function(st) {
+        add('eval', st.idx, 'eval', st.ev.name || 'Chấm thi', st.ev.start, st.ev.end, st.ev.done, st.ev.note);
+      });
     }
     return items;
   }

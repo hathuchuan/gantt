@@ -128,7 +128,7 @@ final class StorageMirror {
         }
     }
 
-    /// Sao lưu ngay trạng thái hiện tại (trước thao tác phá hủy như nạp JSON hoặc khôi phục mẫu).
+    /// Sao lưu ngay trạng thái hiện tại (trước thao tác phá hủy như nạp JSON).
     @discardableResult
     func backupNow(label: String) -> Bool {
         queue.sync { () -> Bool in

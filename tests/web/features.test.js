@@ -113,14 +113,15 @@ const SETUP_COURSES = `
     }));
     check('Trạng thái ổn định', box.cls.includes('normal') && /Ổn Định/.test(box.title), box);
     check('4 công việc, mỗi việc một dòng (li)', box.items.length === 4, box.items.map(i => i.text));
-    const stages = box.items.map(i => i.cls.replace('wl-', ''));
-    check('Thứ tự công đoạn: đề cương → soạn bài → giảng dạy → chấm thi', JSON.stringify(stages) === '["macro","prep","teach","eval"]', stages);
+    const stages = box.items.map(i => i.cls.split(' ')[0].replace('wl-', ''));
+    check('Thứ tự: lớp dạy hôm nay lên đầu, rồi đề cương → soạn bài → chấm thi', JSON.stringify(stages) === '["teach","macro","prep","eval"]', stages);
+    check('Lớp dạy hôm nay tô vàng', box.items[0].cls.includes('wl-teach-today'), box.items[0].cls);
     const tops = box.items.map(i => i.top);
     check('Các dòng xuống hàng (vị trí dọc tăng dần)', tops.every((t, i) => i === 0 || t > tops[i - 1]), tops);
     check('Danh sách đánh số', box.listStyle === 'decimal', box.listStyle);
     check('Màu chữ khác nhau theo công đoạn', new Set(box.items.map(i => i.color)).size === 4, box.items.map(i => i.color));
-    check('Dòng giảng dạy ghi giờ buổi hôm nay', box.items[2].text.includes('Dạy Buổi 2') && box.items[2].text.includes('18:00 - 21:00 (3h)'), box.items[2].text);
-    check('Có nhãn công đoạn', box.items[0].text.includes('Đề cương') && box.items[1].text.includes('Soạn bài'), box.items.map(i => i.text));
+    check('Dòng giảng dạy ghi giờ buổi hôm nay', box.items[0].text.includes('Dạy Buổi 2') && box.items[0].text.includes('18:00 - 21:00 (3h)'), box.items[0].text);
+    check('Có nhãn công đoạn', box.items[1].text.includes('Đề cương') && box.items[2].text.includes('Soạn bài'), box.items.map(i => i.text));
     if (process.env.SHOTS_DIR) await page.screenshot({ path: path.join(process.env.SHOTS_DIR, 'workload.png'), clip: { x: 0, y: 60, width: 520, height: 420 } });
 
     // Trạng thái quá tải (>= 3 lớp chuẩn bị) vẫn liệt kê theo dòng
@@ -335,6 +336,72 @@ const SETUP_COURSES = `
     await page3.waitForTimeout(100);
     check('localStorage hỏng: vẫn lưu được ra tệp', await page3.evaluate(() => __msgs.some(m => m.cmd === 'storageSet' && m.key === 'academic_smart_gantt' && m.value.includes('Đổi tên khi localStorage hỏng'))));
     await page3.close();
+  }
+
+  // ===== 6b. Nhiều giai đoạn chấm thi, tiền tố FSB/RMIT, lớp dạy hôm nay lên đầu, màu chữ theo loại =====
+  {
+    const page = await browser.newPage();
+    page.on('dialog', async d => { await d.accept(); });
+    page.on('pageerror', e => { console.log('PAGEERROR', e.message); failures++; });
+    await page.goto(HTML);
+    await runSetup(page, `
+      courses = normalizeCourses([
+        mk('Lớp ĐH', { id: 'dh1', category: 'Giảng dạy ĐH', hasEvaluation: true,
+          evaluation: { name: 'Chấm giữa kỳ', start: dstr(-20), end: dstr(-15), done: true },
+          extraEvaluations: [{ name: 'Chấm cuối kỳ', start: dstr(-1), end: dstr(3) }] },
+          [sess(1, -40, -38, true)]),
+        mk('Lớp Sau', { id: 'mba2' }, [sess(1, -5, -2), sess(2, -1, 0)]),
+        mk('Lớp Hôm Nay', { id: 'mba1' }, [sess(1, -3, 0)])
+      ]);
+      saveData(); renderGantt();
+    `);
+    const r = await page.evaluate(() => ({
+      stages: getEvalStages(courses.find(c => c.id === 'dh1')).map(s => s.idx),
+      done: isCourseFullyCompleted(courses.find(c => c.id === 'dh1')),
+      bars: document.querySelectorAll('.bar-eval').length,
+      grading: document.getElementById('statGradingCourses').textContent,
+      first: (document.querySelector('#congestionDetails .workload-list li') || {}).className,
+      todayCount: document.querySelectorAll('#congestionDetails .wl-teach-today').length
+    }));
+    check('Chấm thi nhiều giai đoạn: 2 giai đoạn, 2 thanh', JSON.stringify(r.stages) === '[0,1]' && r.bars === 2, r);
+    check('Chưa chấm xong giai đoạn 2 -> dự án chưa hoàn thành', r.done === false);
+    check('Đang chấm thi tính giai đoạn bổ sung', r.grading === '1', r);
+    check('Lớp dạy hôm nay: tô vàng và đứng đầu danh sách', /wl-teach-today/.test(r.first || '') && r.todayCount === 2, r);
+
+    await page.evaluate(() => { toggleBarComplete('dh1', 'eval', 1); });
+    check('Bấm thanh giai đoạn 2 -> hoàn thành', await page.evaluate(() => courses.find(c => c.id === 'dh1').extraEvaluations[0].done === true));
+
+    await page.evaluate(() => openModal('dh1'));
+    await page.click('button[onclick="addExtraEvalStage()"]');
+    check('Thêm giai đoạn chấm thi trong cửa sổ chỉnh sửa', await page.evaluate(() => courses.find(c => c.id === 'dh1').extraEvaluations.length === 2 && document.querySelectorAll('#editExtraEvalList .extra-eval-row').length === 2));
+    await page.evaluate(() => removeExtraEvalStage(1));
+    check('Xóa giai đoạn chấm thi', await page.evaluate(() => courses.find(c => c.id === 'dh1').extraEvaluations.length === 1));
+    await page.evaluate(() => closeModal && closeModal());
+
+    const colors = await page.evaluate(() => {
+      var row = document.querySelector('.gantt-row-wrapper[data-course-id="mba1"] .row-label-cell strong');
+      var cs = getComputedStyle(document.documentElement);
+      return { mba: getComputedStyle(row).color, dh: cs.getPropertyValue('--cat-dh-text').trim(), dn: cs.getPropertyValue('--cat-dn-text').trim(), tv: cs.getPropertyValue('--cat-tv-text').trim(), nc: cs.getPropertyValue('--cat-nc-text').trim() };
+    });
+    check('Tên dự án màu theo loại (MBA xanh dương; ĐH đỏ, DN cam, TV xanh lá, NC tím)', colors.mba === 'rgb(29, 78, 216)' && colors.dh === '#b91c1c' && colors.dn === '#c2410c' && colors.tv === '#047857' && colors.nc === '#6d28d9', colors);
+
+    const names = await page.evaluate(() => {
+      groupAndCreateCourses([
+        { title: 'CLD09 (1)', teachDate: addDays(getTodayStr(), 5), calendar: 'Lịch dạy', source: 'giangvien@fsb.edu.vn' },
+        { title: 'BUS101 (1)', teachDate: addDays(getTodayStr(), 6), calendar: 'RMIT Timetable', source: 'iCloud' },
+        { title: 'FSB CLD10 (1)', teachDate: addDays(getTodayStr(), 6), calendar: 'FSB', source: '' },
+        { title: 'Khác (1)', teachDate: addDays(getTodayStr(), 6), calendar: 'Cá nhân', source: 'iCloud' }
+      ], false, 0, true, true);
+      return courses.map(c => c.name);
+    });
+    check('Tiền tố FSB / RMIT theo tài khoản lịch', ['FSB CLD09', 'RMIT BUS101', 'FSB CLD10', 'Khác'].every(n => names.includes(n)), names);
+    await page.evaluate(() => {
+      courses.push({ id: 'old1', name: 'OLD1', category: 'Giảng dạy ĐH', sessions: [{ num: 1, title: 'Buổi 1', teachDate: addDays(getTodayStr(), 5), prepStart: addDays(getTodayStr(), 3) }] });
+      groupAndCreateCourses([{ title: 'OLD1 (2)', teachDate: addDays(getTodayStr(), 7), calendar: 'FSB' }], false, 0, true, true);
+    });
+    check('Dự án nhập trước đó: thêm tiền tố, không tạo bản trùng', await page.evaluate(() => courses.filter(c => /OLD1/.test(c.name)).map(c => c.name + ':' + c.sessions.length).join() === 'FSB OLD1:2'));
+    check('Không còn nút Khôi phục mẫu', await page.evaluate(() => !document.querySelector('[onclick="resetSample()"]')));
+    await page.close();
   }
 
   // ===== 7. Mở bằng trình duyệt: không phụ thuộc cầu nối =====

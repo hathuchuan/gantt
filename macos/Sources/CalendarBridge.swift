@@ -107,6 +107,7 @@ final class CalendarBridge {
                 "title": title,
                 "teachDate": dayFormatter.string(from: startDate),
                 "calendar": event.calendar?.title ?? "",
+                "source": event.calendar?.source?.title ?? "",
                 "location": (event.location ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             ]
             if !event.isAllDay, let endDate = event.endDate {

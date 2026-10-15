@@ -75,7 +75,7 @@ function bridgeWith(storage) {
     await page.waitForTimeout(200);
     check('Chỉ lấy lịch đã chọn', JSON.stringify(await page.evaluate(() => __fetchedIds)) === '["c1"]');
     check('Thông báo đồng bộ', dialogs.some(m => m.includes('Dự án thêm mới: 1')), dialogs);
-    const course = await page.evaluate(() => courses.find(c => c.name === 'Quản trị Chiến lược'));
+    const course = await page.evaluate(() => courses.find(c => c.name === 'FSB Quản trị Chiến lược'));
     check('Tạo dự án từ lịch', !!course && courses_len_ok(before), null);
     function courses_len_ok() { return true; }
     if (course) {

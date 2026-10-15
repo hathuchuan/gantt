@@ -172,13 +172,7 @@ const SAMPLE = [{ name: 'Môn A', category: 'Giảng dạy MBA', sessions: [{ nu
     await page.waitForTimeout(250);
     check('Nạp {"courses": []} -> cũng không thay thế', dialogs.some(m => m.includes('không chứa dự án nào')) && await page.evaluate(() => courses[0].name === 'Môn từ storage.json'), dialogs);
 
-    // Khôi phục mẫu -> sao lưu trước
-    page.removeAllListeners('dialog');
-    page.on('dialog', async d => { await d.accept(); });
-    await page.evaluate(() => { window.__msgs.length = 0; });
-    await page.click('button[onclick="resetSample()"]');
-    await page.waitForTimeout(200);
-    check('Khôi phục mẫu: sao lưu trước (reset)', await page.evaluate(() => __msgs.some(m => m.cmd === 'backupNow' && m.label === 'reset')));
+    check('Không còn nút Khôi phục mẫu', await page.evaluate(() => !document.querySelector('button[onclick="resetSample()"]') && typeof window.resetSample === 'undefined'));
     await page.close();
   }
 
