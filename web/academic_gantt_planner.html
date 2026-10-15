@@ -52,10 +52,10 @@
       --cat-dh-text: #BE123C;
       --cat-dh-border: #FB7185;
 
-      /* Phân loại: Đào tạo DN (Cam) */
-      --cat-dn-bg: #fff7ed;
-      --cat-dn-text: #c2410c;
-      --cat-dn-border: #fdba74;
+      /* Phân loại: Đào tạo DN (Xám) */
+      --cat-dn-bg: #f1f5f9;
+      --cat-dn-text: #475569;
+      --cat-dn-border: #cbd5e1;
 
       /* Phân loại: Nghiên cứu (Tím) */
       --cat-nc-bg: #f5f3ff;
@@ -856,10 +856,10 @@
     .bar-prep-dh    { background: #FDA4AF; color: #0f172a; }
     .bar-teach-dh   { background: #FB7185; }
 
-    /* Doanh nghiệp Themes (Cam) */
-    .bar-macro-dn   { background: #9a3412; border-left: 3px solid #fed7aa; }
-    .bar-prep-dn    { background: #fb923c; color: #0f172a; }
-    .bar-teach-dn   { background: #ea580c; }
+    /* Doanh nghiệp Themes (Xám) */
+    .bar-macro-dn   { background: #334155; border-left: 3px solid #cbd5e1; }
+    .bar-prep-dn    { background: #94a3b8; color: #0f172a; }
+    .bar-teach-dn   { background: #64748b; }
 
     /* Nghiên cứu (Tím) */
     .bar-nc-submit  { background: #7c3aed; border: 1.5px solid #ddd6fe; }
@@ -1178,7 +1178,7 @@
       --row-completed-bg: #3b1620; --row-completed-hover: #4c1d2a; --row-completed-border: #f87171;
       --cat-mba-bg: #172554; --cat-mba-text: #93c5fd; --cat-mba-border: #1d4ed8;
       --cat-dh-bg: #4c0519; --cat-dh-text: #FDA4AF; --cat-dh-border: #BE123C;
-      --cat-dn-bg: #44210c; --cat-dn-text: #fdba74; --cat-dn-border: #c2410c;
+      --cat-dn-bg: #1e293b; --cat-dn-text: #cbd5e1; --cat-dn-border: #64748b;
       --cat-nc-bg: #2e1f5a; --cat-nc-text: #c4b5fd; --cat-nc-border: #6d28d9;
       --cat-tv-bg: #0b3a2c; --cat-tv-text: #6ee7b7; --cat-tv-border: #047857;
       --today-bg: rgba(244, 114, 182, 0.22); --today-text: #f9a8d4;
@@ -1310,7 +1310,7 @@
       <span id="saveStatus" class="save-status" style="display:none;"></span>
       <span id="macAutoStatus" class="auto-sync-status" style="display:none;" onclick="runMacAutoSync(true)" title="Bấm để cập nhật từ Apple Calendar ngay"></span>
       <button type="button" class="btn btn-secondary" id="btnTheme" onclick="toggleTheme()" title="Chuyển giao diện Sáng / Tối">🌙 Tối</button>
-      <button type="button" class="btn btn-secondary" id="btnBlockedRegistry" onclick="clearDeletedBlocklist()" title="Bấm để xem hoặc gỡ danh sách chặn các dự án đã xóa khỏi sync-server">
+      <button type="button" class="btn btn-secondary" id="btnBlockedRegistry" onclick="clearDeletedBlocklist()" title="Bấm để xem, khôi phục hoặc bỏ chặn các dự án đã xóa">
         🚫 Đã chặn xóa (0)
       </button>
       <button type="button" class="btn btn-secondary" onclick="exportData()">📥 Xuất JSON</button>
@@ -1381,7 +1381,7 @@
             <select id="commonCategory" class="form-control" onchange="handleCategoryModeChange()">
               <option value="Giảng dạy MBA">Giảng dạy MBA (Xanh dương)</option>
               <option value="Giảng dạy ĐH">Giảng dạy Đại học (Hồng Rose)</option>
-              <option value="Đào tạo DN">Đào tạo Doanh nghiệp (Cam)</option>
+              <option value="Đào tạo DN">Đào tạo Doanh nghiệp (Xám)</option>
               <option value="Nghiên cứu">Nghiên cứu (Đếm ngược Submit)</option>
               <option value="Tư vấn doanh nghiệp">Tư vấn doanh nghiệp (Deadline)</option>
             </select>
@@ -1693,7 +1693,7 @@
           <select id="editCourseCategory" class="form-control" onchange="handleEditCategorySwitch()">
             <option value="Giảng dạy MBA">Giảng dạy MBA (Xanh dương)</option>
             <option value="Giảng dạy ĐH">Giảng dạy Đại học (Hồng Rose)</option>
-            <option value="Đào tạo DN">Đào tạo Doanh nghiệp (Cam)</option>
+            <option value="Đào tạo DN">Đào tạo Doanh nghiệp (Xám)</option>
             <option value="Nghiên cứu">Nghiên cứu (Submit lần 1, 2...)</option>
             <option value="Tư vấn doanh nghiệp">Tư vấn doanh nghiệp (Deadline)</option>
           </select>
@@ -2195,6 +2195,24 @@
     deletedRegistry = [];
   }
 
+  // Thùng rác: bản sao các dự án đã xóa (kèm khóa chặn) để có thể khôi phục.
+  var deletedTrash = [];
+  try {
+    var savedTrash = readStored('academic_smart_gantt_trash');
+    if (savedTrash) {
+      var parsedTrash = JSON.parse(savedTrash);
+      if (Array.isArray(parsedTrash)) deletedTrash = parsedTrash;
+    }
+  } catch (e) {
+    deletedTrash = [];
+  }
+
+  function saveDeletedTrash() {
+    try {
+      writeStored('academic_smart_gantt_trash', JSON.stringify(deletedTrash));
+    } catch (e) {}
+  }
+
   // Liên kết khối Gantt <-> ghi chú Markdown (MD Editor). Lưu riêng khỏi danh sách dự án để không bị
   // normalizeCourses / đồng bộ Calendar làm mất. Dạng: { "<blockId>": { path: "/abs/note.md" } }
   var noteLinks = {};
@@ -2245,6 +2263,13 @@
       }
     });
     saveDeletedRegistry();
+    deletedTrash = deletedTrash.filter(function(t) { return !t.course || t.course.id !== c.id; });
+    deletedTrash.push({
+      course: JSON.parse(JSON.stringify(c)),
+      keys: keysToBlock.filter(function(k) { return !!k; }),
+      deletedAt: new Date().toISOString()
+    });
+    saveDeletedTrash();
   }
 
   function isProjectBlockedFromSync(syncId, syncKey, rawCourseName) {
@@ -2266,16 +2291,85 @@
     btn.textContent = '🚫 Đã chặn xóa (' + approxProjects + ')';
   }
 
+  function esc(str) {
+    return String(str == null ? '' : str).replace(/[&<>"]/g, function(ch) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch];
+    });
+  }
+
+  function closeBlocklistDialog() {
+    var el = document.getElementById('blocklistDialog');
+    if (el) el.parentNode.removeChild(el);
+  }
+
   function clearDeletedBlocklist() {
-    if (deletedRegistry.length === 0) {
+    if (deletedRegistry.length === 0 && deletedTrash.length === 0) {
       alert('Hiện không có dự án nào trong danh sách chặn đồng bộ.');
       return;
     }
-    if (confirm('Bạn đang chặn ' + deletedRegistry.length + ' khóa nhận diện của các dự án đã xóa để chúng không tự tải lại từ sync-server.\n\nBạn có muốn XÓA danh sách chặn này để cho phép đồng bộ lại tất cả không?')) {
-      deletedRegistry = [];
-      saveDeletedRegistry();
-      alert('Đã làm trống danh sách chặn xóa!');
+    closeBlocklistDialog();
+    var covered = {};
+    deletedTrash.forEach(function(t) { (t.keys || []).forEach(function(k) { covered[k] = true; }); });
+    var legacyKeys = deletedRegistry.filter(function(k) { return !covered[k]; });
+
+    var rows = deletedTrash.map(function(t, idx) {
+      var name = (t.course && t.course.name) || '(không tên)';
+      var when = t.deletedAt ? new Date(t.deletedAt).toLocaleString('vi-VN') : '';
+      return '<label style="display:flex;gap:8px;align-items:center;padding:6px 4px;border-bottom:1px solid var(--border);">' +
+        '<input type="checkbox" class="blk-item" data-idx="' + idx + '">' +
+        '<span style="flex:1;"><b>' + esc(name) + '</b><br><small style="color:var(--text-muted);">Xóa lúc ' + esc(when) + '</small></span></label>';
+    }).join('');
+    if (legacyKeys.length) {
+      rows += '<label style="display:flex;gap:8px;align-items:center;padding:6px 4px;">' +
+        '<input type="checkbox" id="blkLegacy"><span style="flex:1;"><b>' + legacyKeys.length + ' khóa chặn cũ</b><br>' +
+        '<small style="color:var(--text-muted);">Không có dữ liệu để khôi phục, chỉ có thể bỏ chặn.</small></span></label>';
     }
+
+    var wrap = document.createElement('div');
+    wrap.id = 'blocklistDialog';
+    wrap.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:10000;display:flex;align-items:center;justify-content:center;';
+    wrap.innerHTML =
+      '<div style="background:var(--bg-card);color:var(--text);border-radius:10px;padding:16px;width:min(520px,92vw);max-height:80vh;display:flex;flex-direction:column;box-shadow:0 10px 40px rgba(0,0,0,.35);">' +
+      '<h3 style="margin:0 0 8px;">🚫 Dự án đã xóa / bị chặn</h3>' +
+      '<div style="overflow:auto;flex:1;">' + rows + '</div>' +
+      '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;flex-wrap:wrap;">' +
+      '<button type="button" class="btn btn-secondary" id="blkClose">Đóng</button>' +
+      '<button type="button" class="btn btn-secondary" id="blkUnblock">Bỏ chặn (cho đồng bộ lại)</button>' +
+      '<button type="button" class="btn btn-primary" id="blkRestore">Khôi phục đã chọn</button>' +
+      '</div></div>';
+    document.body.appendChild(wrap);
+
+    function selected() {
+      var idxs = [];
+      wrap.querySelectorAll('.blk-item').forEach(function(cb) { if (cb.checked) idxs.push(parseInt(cb.getAttribute('data-idx'), 10)); });
+      var legacy = !!(wrap.querySelector('#blkLegacy') && wrap.querySelector('#blkLegacy').checked);
+      return { idxs: idxs, legacy: legacy };
+    }
+
+    function apply(restore) {
+      var sel = selected();
+      if (!sel.idxs.length && !sel.legacy) { alert('Hãy tick chọn ít nhất một mục.'); return; }
+      var drop = {};
+      var entries = sel.idxs.map(function(i) { return deletedTrash[i]; }).filter(Boolean);
+      entries.forEach(function(t) {
+        (t.keys || []).forEach(function(k) { drop[k] = true; });
+        if (restore && t.course && !courses.some(function(x) { return x.id === t.course.id; })) {
+          courses.push(t.course);
+        }
+      });
+      if (sel.legacy) legacyKeys.forEach(function(k) { drop[k] = true; });
+      deletedRegistry = deletedRegistry.filter(function(k) { return !drop[k]; });
+      deletedTrash = deletedTrash.filter(function(t) { return entries.indexOf(t) === -1; });
+      saveDeletedRegistry();
+      saveDeletedTrash();
+      if (restore) { saveData(); renderGantt(); }
+      closeBlocklistDialog();
+    }
+
+    wrap.querySelector('#blkClose').onclick = closeBlocklistDialog;
+    wrap.querySelector('#blkRestore').onclick = function() { apply(true); };
+    wrap.querySelector('#blkUnblock').onclick = function() { apply(false); };
+    wrap.addEventListener('click', function(e) { if (e.target === wrap) closeBlocklistDialog(); });
   }
 
   // =========================================================================
