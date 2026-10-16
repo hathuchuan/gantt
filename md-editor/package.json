@@ -15,7 +15,7 @@
   },
   "scripts": {
     "start": "electron .",
-    "test": "node --test test/editing.test.js test/math.test.js test/gantt.test.js test/html2md.test.js test/export.test.js",
+    "test": "node --test test/editing.test.js test/math.test.js test/gantt.test.js test/html2md.test.js test/export.test.js test/notes-core.test.js test/notes-index.test.js",
     "dist": "electron-builder --mac --publish never"
   },
   "build": {
@@ -28,6 +28,7 @@
       "main.js",
       "preload.js",
       "gantt.js",
+      "notes-index.js",
       "export.js",
       "import.js",
       "src/**/*"

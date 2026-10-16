@@ -139,3 +139,76 @@ test('projectNotes: notes of the same project from Gantt links and from front ma
   assert.deepStrictEqual(G.projectNotes({ block: '', storage: {} }), { course: '', notes: [] });
   fs.rmSync(root, { recursive: true, force: true });
 });
+
+// ---------- auto-updating /ganttblocks table (render + replace logic lives in src/editing.js) ----------
+const E = require('../src/editing.js');
+const NOW = new Date(2026, 9, 16);
+const rows = (blocks) => G.readBlocks({ academic_smart_gantt: JSON.stringify(blocks) }, { today: '2026-10-16', all: true, course: 'c1' });
+const tableFor = (done) => {
+  const cs = JSON.parse(JSON.stringify(courses));
+  cs[0].sessions[0].teachDone = done;
+  return E.ganttBlocksBlock({ project: 'c1', course: 'Quản trị Chiến lược', blocks: rows(cs), now: NOW });
+};
+
+test('ganttBlocksBlock: markers with the project id, caption with date, table, blank line before the end marker', () => {
+  const b = tableFor(false);
+  const lines = b.split('\n');
+  assert.strictEqual(lines[0], '<!-- gantt-blocks project="c1" -->');
+  assert.strictEqual(lines[1], '**Quản trị Chiến lược** — tasks & deadlines (as of 2026-10-16)');
+  assert.strictEqual(lines[3], '| Task | Start | Deadline | Days | Status |');
+  assert.strictEqual(lines[lines.length - 2], '');
+  assert.strictEqual(lines[lines.length - 1], '<!-- /gantt-blocks -->');
+  assert.ok(b.includes('| Buổi 1: Giới thiệu | 2026-10-17 | 2026-10-17 | 1 | ⏳ Starts in 1 day |'));
+  assert.deepStrictEqual(E.ganttBlocksProjects('x\n' + b + '\ny'), ['c1']);
+  assert.ok(E.hasGanttBlocks(b) && !E.hasGanttBlocks('| Task | Start |\n| --- | --- |'));
+  // odd project ids survive the round trip
+  const odd = E.ganttBlocksBlock({ project: 'a"b-->c%', course: 'C', blocks: rows(courses).slice(0, 1), now: NOW });
+  assert.strictEqual(odd.split('\n').length > 3, true);
+  assert.deepStrictEqual(E.ganttBlocksProjects(odd), ['a"b-->c%']);
+});
+
+test('updateGanttBlocks rewrites only what is between the markers; no-op when current', () => {
+  const doc = '# Notes\n\nbefore\n\n' + tableFor(false) + '\n\nafter text\n';
+  assert.strictEqual(E.updateGanttBlocks(doc, new Map([['c1', tableFor(false)]])), null); // unchanged
+  const out = E.updateGanttBlocks(doc, new Map([['c1', tableFor(true)]]));
+  assert.ok(out.startsWith('# Notes\n\nbefore\n\n<!-- gantt-blocks project="c1" -->'));
+  assert.ok(out.endsWith('<!-- /gantt-blocks -->\n\nafter text\n'));
+  assert.ok(out.includes('✅ Done') && !doc.includes('✅ Done'));
+  // a project Gantt no longer has (no entry) keeps its old table; text the user wrote inside the markers is replaced
+  assert.strictEqual(E.updateGanttBlocks(doc, new Map([['zz', 'x']])), null);
+  const edited = doc.replace('| Task |', '| MY EDIT |');
+  assert.ok(!E.updateGanttBlocks(edited, new Map([['c1', tableFor(false)]])).includes('MY EDIT'));
+  // two tables for two projects are refreshed independently
+  const two = doc + '\n' + tableFor(false).replace('project="c1"', 'project="r1"');
+  const r = E.updateGanttBlocks(two, new Map([['r1', '<!-- gantt-blocks project="r1" -->\nNEW\n<!-- /gantt-blocks -->']]));
+  assert.ok(r.includes('NEW') && r.includes('project="c1"') && r.includes('Buổi 1'));
+  assert.deepStrictEqual(E.ganttBlocksProjects(two), ['c1', 'r1']);
+});
+
+test('/ganttblocks inserts once: running it again refreshes in place instead of duplicating the markers', () => {
+  const v = '# Plan\n\nintro\n';
+  const first = E.upsertGanttBlocks(v, v.length, v.length, 'c1', tableFor(false));
+  assert.strictEqual(first.replaced, false);
+  const doc = v.slice(0, first.edit.from) + first.edit.text + v.slice(first.edit.to);
+  assert.strictEqual((doc.match(/<!-- gantt-blocks /g) || []).length, 1);
+  assert.ok(doc.startsWith('# Plan\n\nintro\n\n<!-- gantt-blocks project="c1" -->') && doc.endsWith('<!-- /gantt-blocks -->\n'));
+
+  const caret = doc.length;
+  const second = E.upsertGanttBlocks(doc, caret, caret, 'c1', tableFor(true));
+  assert.strictEqual(second.replaced, true);
+  const doc2 = doc.slice(0, second.edit.from) + second.edit.text + doc.slice(second.edit.to);
+  assert.strictEqual((doc2.match(/<!-- gantt-blocks /g) || []).length, 1);
+  assert.strictEqual((doc2.match(/<!-- \/gantt-blocks -->/g) || []).length, 1);
+  assert.ok(doc2.includes('✅ Done') && doc2.startsWith('# Plan\n\nintro\n\n'));
+  assert.ok(second.edit.selStart <= doc2.length);
+
+  // another project may have its own table in the same note
+  const other = E.upsertGanttBlocks(doc2, doc2.length, doc2.length, 'r1', tableFor(false).replace('project="c1"', 'project="r1"'));
+  assert.strictEqual(other.replaced, false);
+});
+
+test('an old snapshot table (no markers) is left alone by every refresh', () => {
+  const legacy = '**QT** — tasks & deadlines (as of 2026-09-01)\n\n' + E.ganttTable(rows(courses)) + '\n';
+  assert.deepStrictEqual(E.ganttBlocksProjects(legacy), []);
+  assert.strictEqual(E.updateGanttBlocks(legacy, new Map([['c1', tableFor(false)]])), null);
+});

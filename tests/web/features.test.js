@@ -163,9 +163,16 @@ const SETUP_COURSES = `
     check('Thanh đã xong không bị cảnh báo', o.doneOverdue === 0);
     if (process.env.SHOTS_DIR) await page.screenshot({ path: path.join(process.env.SHOTS_DIR, 'overdue.png'), clip: { x: 0, y: 60, width: 520, height: 520 } });
 
-    // Nhấp vào mục cảnh báo mở dự án
+    // Nhấp vào mục cảnh báo mở / tạo ghi chú Markdown; chuột phải có tùy chọn chỉnh sửa dự án
+    await page.evaluate(() => { window.__opened = []; openExternalUrl = function(u) { window.__opened.push(u); }; });
     await page.click('#overdueAlertBox li');
-    check('Nhấp mục quá hạn mở cửa sổ dự án', await page.evaluate(() => document.getElementById('editModal').classList.contains('active')));
+    const opened = await page.evaluate(() => window.__opened);
+    check('Nhấp mục quá hạn mở ghi chú Markdown của khối', opened.length === 1 && /^mdeditor:\/\/note\?/.test(opened[0]) && /block=/.test(opened[0]), opened);
+    await page.click('#overdueAlertBox li', { button: 'right' });
+    const ctx = await page.$$eval('#ctxMenu .ctx-item', els => els.map(e => e.textContent));
+    check('Chuột phải mục quá hạn: có ghi chú + chỉnh sửa dự án', ctx.some(t => t.includes('ghi chú')) && ctx.some(t => t.includes('Chỉnh sửa')), ctx);
+    await page.click('#ctxMenu .ctx-item:has-text("Chỉnh sửa")');
+    check('Chọn "Chỉnh sửa dự án" mở cửa sổ dự án', await page.evaluate(() => document.getElementById('editModal').classList.contains('active')));
     await page.keyboard.press('Escape');
 
     // Đánh dấu hoàn thành -> hết cảnh báo
@@ -346,12 +353,12 @@ const SETUP_COURSES = `
     await page.goto(HTML);
     await runSetup(page, `
       courses = normalizeCourses([
-        mk('Lớp ĐH', { id: 'dh1', category: 'Giảng dạy ĐH', hasEvaluation: true,
+        mk('Lớp RMIT', { id: 'dh1', category: 'RMIT', hasEvaluation: true,
           evaluation: { name: 'Chấm giữa kỳ', start: dstr(-20), end: dstr(-15), done: true },
           extraEvaluations: [{ name: 'Chấm cuối kỳ', start: dstr(-1), end: dstr(3) }] },
           [sess(1, -40, -38, true)]),
-        mk('Lớp Sau', { id: 'mba2' }, [sess(1, -5, -2), sess(2, -1, 0)]),
-        mk('Lớp Hôm Nay', { id: 'mba1' }, [sess(1, -3, 0)])
+        mk('Lớp Sau', { id: 'mba2', category: 'FSB' }, [sess(1, -5, -2), sess(2, -1, 0)]),
+        mk('Lớp Hôm Nay', { id: 'mba1', category: 'FSB' }, [sess(1, -3, 0)])
       ]);
       saveData(); renderGantt();
     `);
@@ -381,9 +388,9 @@ const SETUP_COURSES = `
     const colors = await page.evaluate(() => {
       var row = document.querySelector('.gantt-row-wrapper[data-course-id="mba1"] .row-label-cell strong');
       var cs = getComputedStyle(document.documentElement);
-      return { mba: getComputedStyle(row).color, dh: cs.getPropertyValue('--cat-dh-text').trim(), dn: cs.getPropertyValue('--cat-dn-text').trim(), tv: cs.getPropertyValue('--cat-tv-text').trim(), nc: cs.getPropertyValue('--cat-nc-text').trim() };
+      return { fsb: getComputedStyle(row).color, rmit: cs.getPropertyValue('--cat-rmit-text').trim(), outlook: cs.getPropertyValue('--cat-outlook-text').trim(), tv: cs.getPropertyValue('--cat-tv-text').trim(), nc: cs.getPropertyValue('--cat-nc-text').trim() };
     });
-    check('Tên dự án màu theo loại (MBA xanh dương; ĐH hồng rose, DN cam, TV xanh lá, NC tím)', colors.mba === 'rgb(29, 78, 216)' && colors.dh === '#BE123C' && colors.dn === '#c2410c' && colors.tv === '#047857' && colors.nc === '#6d28d9', colors);
+    check('Tên dự án màu theo loại (FSB xanh dương; RMIT đỏ, Outlook hồng nhạt, TV xanh lá, NC tím)', colors.fsb === 'rgb(29, 78, 216)' && colors.rmit === '#b91c1c' && colors.outlook === '#be185d' && colors.tv === '#047857' && colors.nc === '#6d28d9', colors);
 
     const names = await page.evaluate(() => {
       groupAndCreateCourses([

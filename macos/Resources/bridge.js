@@ -53,6 +53,9 @@
     // Hộp thoại chọn tệp văn bản của macOS. Trả về { name, content } hoặc false nếu bấm Hủy.
     // Mở địa chỉ mdeditor:// (ghi chú Markdown). Reject nếu chưa cài MD Editor.
     openURL: function (url) { return call('openURL', { url: String(url) }); },
+    // Widget iPhone: đọc các thao tác "hoàn thành" widget đã ghi (chuỗi JSON, rỗng nếu chưa có) và ghi xác nhận đã áp dụng.
+    readWidgetActions: function () { return call('readWidgetActions'); },
+    writeWidgetAck: function (content) { return call('writeWidgetAck', { content: String(content) }); },
     openTextFile: function (extensions) { return call('openTextFile', { extensions: extensions || [] }); },
     listCalendars: function () { return call('listCalendars'); },
     fetchEvents: function (calendarIds) { return call('fetchEvents', { calendarIds: calendarIds || [] }); },

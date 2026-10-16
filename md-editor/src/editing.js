@@ -175,7 +175,7 @@
     it('Insert', 'time', 'Current time', '🕒', '{time}'),
     it('Insert', 'gantt', 'Link to Gantt block', '🗓', null, { action: 'gantt' }),
     it('Insert', 'ganttopen', 'Show in Gantt', '↗', null, { action: 'gantt-open' }),
-    it('Insert', 'ganttblocks', 'Gantt tasks & deadlines table', '▦', null, { action: 'gantt-table' }),
+    it('Insert', 'ganttblocks', 'Gantt tasks & deadlines table (auto-updating)', '▦', null, { action: 'gantt-table' }),
     it('Insert', 'projectnotes', 'Project notes list (auto-updating)', '☰', null, { action: 'project-notes' }),
 
     it('Math', 'math', 'Inline math', '$', '${cursor}$'),
@@ -375,6 +375,51 @@
     return ['| Task | Start | Deadline | Days | Status |', '| --- | --- | --- | ---: | --- |', ...rows].join('\n');
   }
 
+  // ---------- auto-updating Gantt tasks table ----------
+  // `/ganttblocks` wraps the table in markers; MD Editor re-renders what is between them from Gantt's data
+  // (when the note opens, on focus, on preview, on save and when Gantt's storage.json changes).
+  const GB_END = '<!-- /gantt-blocks -->';
+  const gbEnc = (p) => String(p).replace(/[%"<>\r\n]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase().padStart(2, '0'));
+  const gbDec = (p) => {
+    try {
+      return decodeURIComponent(p);
+    } catch {
+      return p;
+    }
+  };
+  const gbRe = () => /<!-- gantt-blocks project="([^"\n]*)" -->[\s\S]*?<!-- \/gantt-blocks -->/g;
+
+  // { project, course, blocks, now } → the marked block: caption + table.
+  function ganttBlocksBlock({ project, course, blocks, now = new Date() }) {
+    const caption = `**${escText(course || (blocks[0] && blocks[0].course) || project)}** — tasks & deadlines (as of ${fmtDate(now)})`;
+    return [`<!-- gantt-blocks project="${gbEnc(project)}" -->`, caption, '', ganttTable(blocks), '', GB_END].join('\n');
+  }
+
+  // Project ids of the auto-updating tables in a note (document order, no duplicates).
+  const ganttBlocksProjects = (v) => [...new Set([...v.matchAll(gbRe())].map((m) => gbDec(m[1])))];
+  const hasGanttBlocks = (v) => gbRe().test(v);
+
+  // Re-render every marked table: tables = Map(project id → new block text). Projects without an entry stay as they are.
+  // Returns the new text, or null when nothing changes.
+  function updateGanttBlocks(v, tables) {
+    const out = v.replace(gbRe(), (m, p) => (tables.has(gbDec(p)) ? tables.get(gbDec(p)) : m));
+    return out === v ? null : out;
+  }
+
+  // `/ganttblocks` at the caret. A note that already has the table of this project gets it refreshed in place
+  // instead of a second copy: { edit, replaced }.
+  function upsertGanttBlocks(v, s, e, project, block) {
+    for (const m of v.matchAll(gbRe())) {
+      if (gbDec(m[1]) !== project) continue;
+      const from = m.index;
+      const to = from + m[0].length;
+      const delta = block.length - (to - from);
+      const move = (pos) => (pos <= from ? pos : pos >= to ? pos + delta : from + block.length);
+      return { edit: edit(from, to, block, move(s), move(e)), replaced: true };
+    }
+    return { edit: insertBlock(v, s, e, block), replaced: false };
+  }
+
   // The target of the Markdown link `[text](target)` that contains position `pos`, or ''.
   function linkAt(v, pos) {
     const ls = lineStart(v, pos);
@@ -433,5 +478,6 @@
     parseFrontMatter, setGantt, clearGantt, fileLink, dropFiles, linkAt,
     insertBlock, stripProjectNotes, insertSnippets, imageRef, isImageName, pastedImageName,
     projectNotesBlock, updateProjectNotes, hasProjectNotes, ganttTable, statusText,
+    ganttBlocksBlock, ganttBlocksProjects, hasGanttBlocks, updateGanttBlocks, upsertGanttBlocks, localDate: fmtDate,
   };
 });

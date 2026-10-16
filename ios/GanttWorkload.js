@@ -1,9 +1,14 @@
 // Widget iPhone "Tải công việc" cho Academic Gantt Planner — chạy trong app Scriptable.
 // Bấm vào widget → chọn ngày (hôm nay hoặc ngày khác) → widget hiển thị tải công việc ngày đó.
+// Bấm vào một dòng việc (widget cỡ vừa / lớn) hoặc "Đánh dấu hoàn thành…" → đánh dấu xong, tự đồng bộ về app Mac.
+// Đồng bộ ngược: widget ghi gantt_actions.json; app Mac áp dụng rồi ghi gantt_actions_ack.json.
 // Dữ liệu: gantt_courses.json do app Mac ghi vào iCloud Drive/Scriptable (xem ios/README.md).
 
 const DATA_FILE = "gantt_courses.json";
 const FOCUS_FILE = "gantt_focus.json";
+const ACTIONS_FILE = "gantt_actions.json";      // widget ghi (chỉ widget ghi tệp này)
+const ACK_FILE = "gantt_actions_ack.json";      // app Mac ghi (chỉ app Mac ghi tệp này)
+const ACK_KEEP_MS = 60 * 60 * 1000;             // giữ thao tác đã được Mac xác nhận thêm 1 giờ rồi dọn
 const SCRIPT_NAME = Script.name();
 const STAGES = {
   macro: { label: "Đề cương", color: "#a78bfa" },
@@ -34,13 +39,79 @@ function writeFocus(date) {
   fm.writeString(fm.joinPath(fm.documentsDirectory(), FOCUS_FILE), JSON.stringify({ date, setOn: today() }));
 }
 
+// ---- Thao tác đánh dấu hoàn thành (widget → Mac) ----
+function docPath(name) { return fm.joinPath(fm.documentsDirectory(), name); }
+async function readJson(name, fallback) {
+  try {
+    const p = docPath(name);
+    if (!fm.fileExists(p)) return fallback;
+    if (!fm.isFileDownloaded(p)) await fm.downloadFileFromiCloud(p);
+    const v = JSON.parse(fm.readString(p));
+    return v === null || v === undefined ? fallback : v;
+  } catch (e) { return fallback; }
+}
+async function loadActions() {
+  const raw = await readJson(ACTIONS_FILE, []);
+  return Array.isArray(raw) ? raw : [];
+}
+async function loadAckedIds() {
+  const raw = await readJson(ACK_FILE, {});
+  return new Set(Array.isArray(raw.ids) ? raw.ids : []);
+}
+// Ghi thêm một thao tác; dọn các thao tác Mac đã xác nhận từ lâu.
+async function appendAction(act, done) {
+  const actions = await loadActions();
+  const acked = await loadAckedIds();
+  const now = Date.now();
+  const kept = actions.filter((a) => !(acked.has(a.id) && now - Date.parse(a.at || 0) > ACK_KEEP_MS));
+  kept.push({
+    id: now.toString(36) + Math.random().toString(36).slice(2, 6),
+    courseId: act.courseId, kind: act.kind, idx: act.idx, guard: act.guard || "",
+    label: act.label || "", done: !!done, at: new Date(now).toISOString(),
+  });
+  fm.writeString(docPath(ACTIONS_FILE), JSON.stringify(kept));
+  return kept;
+}
+// Áp thao tác lên bản sao dữ liệu (giống applyWidgetAction trong web/academic_gantt_planner.html)
+function applyAction(courses, a) {
+  const c = courses.find((x) => x.id === a.courseId);
+  if (!c) return;
+  const done = a.done !== false;
+  if (a.kind === "session_teach" || a.kind === "session_prep") {
+    const list = c.sessions || [];
+    let s = list[a.idx];
+    if (a.guard && (!s || s.teachDate !== a.guard)) s = list.find((x) => x.teachDate === a.guard);
+    if (!s) return;
+    if (a.kind === "session_teach") s.teachDone = done; else s.prepDone = done;
+  } else if (a.kind === "macro") {
+    c.macroDone = done;
+  } else if (a.kind === "eval") {
+    const evs = [c.evaluation, ...(c.extraEvaluations || [])];
+    let e = evs[a.idx];
+    if (a.guard && (!e || e.start !== a.guard)) e = evs.find((x) => x && x.start === a.guard);
+    if (e) e.done = done;
+  }
+}
+async function overlayPendingActions(courses) {
+  const actions = await loadActions();
+  if (!actions.length) return actions;
+  const acked = await loadAckedIds();
+  actions
+    .filter((a) => !acked.has(a.id))                       // đã được Mac xác nhận thì dữ liệu Mac đã phản ánh
+    .sort((x, y) => String(x.at).localeCompare(String(y.at)))
+    .forEach((a) => applyAction(courses, a));
+  return actions;
+}
+
 // ---- Đọc dữ liệu ----
 async function loadCourses() {
   const p = fm.joinPath(fm.documentsDirectory(), DATA_FILE);
   if (!fm.fileExists(p)) return null;
   if (!fm.isFileDownloaded(p)) await fm.downloadFileFromiCloud(p);
   const raw = JSON.parse(fm.readString(p));
-  return Array.isArray(raw) ? raw : null;
+  if (!Array.isArray(raw)) return null;
+  await overlayPendingActions(raw);
+  return raw;
 }
 
 // ---- Tính tải công việc (giống updateWorkloadAlertBox trong web/academic_gantt_planner.html) ----
@@ -85,24 +156,32 @@ function workFor(courses, f) {
     const md = parseInt(c.macroDays, 10) || 0;
     if (md > 0 && s.length && !c.macroDone) {
       const end = s[0].prepStart || s[0].teachDate;
-      if (f >= addDays(end, -md) && f <= end) { items.push({ stage: "macro", name: c.name, detail: "Đề cương toàn khóa" }); prep.add(c.id); }
-    }
-    for (const x of s) {
-      if (!x.prepDone && x.prepStart && x.teachDate && f >= x.prepStart && f < x.teachDate) {
-        items.push({ stage: "prep", name: c.name, detail: `${x.title} (dạy ${vn(x.teachDate).slice(0, 5)})` });
+      if (f >= addDays(end, -md) && f <= end) {
+        items.push({ stage: "macro", name: c.name, detail: "Đề cương toàn khóa", act: { courseId: c.id, kind: "macro", idx: 0, guard: "", label: c.name + " — Đề cương" } });
         prep.add(c.id);
       }
     }
+    s.forEach((x, i) => {
+      if (!x.prepDone && x.prepStart && x.teachDate && f >= x.prepStart && f < x.teachDate) {
+        items.push({ stage: "prep", name: c.name, detail: `${x.title} (dạy ${vn(x.teachDate).slice(0, 5)})`,
+          act: { courseId: c.id, kind: "session_prep", idx: i, guard: x.teachDate, label: `${c.name} — Soạn ${x.title}` } });
+        prep.add(c.id);
+      }
+    });
     if (s.length && f >= s[0].teachDate && f <= s[s.length - 1].teachDate) {
-      const d = s.find((x) => x.teachDate === f);
-      items.push({ stage: "teach", name: c.name, detail: d ? `${d.title} · ${timeRange(d.startTime || c.startTime, d.durationHours || c.durationHours)}` : "Đang trong kỳ dạy" });
+      const di = s.findIndex((x) => x.teachDate === f);
+      const d = di >= 0 ? s[di] : null;
+      items.push({ stage: "teach", name: c.name, done: !!(d && d.teachDone),
+        detail: d ? `${d.title} · ${timeRange(d.startTime || c.startTime, d.durationHours || c.durationHours)}` : "Đang trong kỳ dạy",
+        act: d ? { courseId: c.id, kind: "session_teach", idx: di, guard: d.teachDate, label: `${c.name} — Dạy ${d.title}` } : null });
     }
     if (c.hasEvaluation !== false) {
-      for (const e of [c.evaluation, ...(c.extraEvaluations || [])]) {
+      [c.evaluation, ...(c.extraEvaluations || [])].forEach((e, i) => {
         if (e && !e.done && e.start && e.end && f >= e.start && f <= e.end) {
-          items.push({ stage: "eval", name: c.name, detail: `${e.name || "Chấm thi"} → ${vn(e.end).slice(0, 5)}` });
+          items.push({ stage: "eval", name: c.name, detail: `${e.name || "Chấm thi"} → ${vn(e.end).slice(0, 5)}`,
+            act: { courseId: c.id, kind: "eval", idx: i, guard: e.start, label: `${c.name} — ${e.name || "Chấm thi"}` } });
         }
-      }
+      });
     }
   }
   items.sort((a, b) => ORDER[a.stage] - ORDER[b.stage]);
@@ -115,6 +194,7 @@ async function buildWidget(date) {
   w.backgroundColor = new Color("#0f172a");
   w.url = URLScheme.forRunningScript(); // bấm → chạy script trong app để chọn ngày
   w.setPadding(12, 14, 12, 14);
+  w.refreshAfterDate = new Date(Date.now() + 5 * 60 * 1000);
 
   const courses = await loadCourses();
   const isToday = date === today();
@@ -139,14 +219,25 @@ async function buildWidget(date) {
     const t = w.addText("Không có công việc.");
     t.font = Font.systemFont(11); t.textColor = new Color("#94a3b8");
   }
+  const small = config.widgetFamily === "small";
   items.slice(0, max).forEach((it, i) => {
     const r = w.addStack(); r.centerAlignContent(); r.spacing = 5;
+    // Widget cỡ vừa / lớn: bấm vào dòng việc = đánh dấu hoàn thành (hoặc bỏ đánh dấu nếu đã xong)
+    if (!small && it.act) r.url = URLScheme.forRunningScript() + "?toggle=" + encodeURIComponent(JSON.stringify({ act: it.act, done: !it.done }));
+    if (it.act) {
+      const box = r.addText(it.done ? "✓" : "○");
+      box.font = Font.boldSystemFont(11); box.textColor = new Color(it.done ? "#4ade80" : "#64748b");
+    }
     const tag = r.addText(STAGES[it.stage].label);
     tag.font = Font.boldSystemFont(9); tag.textColor = new Color(STAGES[it.stage].color);
-    const txt = r.addText(config.widgetFamily === "small" ? it.name : `${it.name} — ${it.detail}`);
-    txt.font = Font.systemFont(11); txt.textColor = Color.white(); txt.lineLimit = 1;
+    const txt = r.addText(small ? it.name : `${it.name} — ${it.detail}`);
+    txt.font = Font.systemFont(11); txt.textColor = it.done ? new Color("#64748b") : Color.white(); txt.lineLimit = 1;
     w.addSpacer(2);
   });
+  if (!small && items.some((it) => it.act)) {
+    const hint = w.addText("Chạm vào một việc để đánh dấu hoàn thành");
+    hint.font = Font.systemFont(8); hint.textColor = new Color("#64748b");
+  }
   if (items.length > max) {
     const m = w.addText(`+${items.length - max} việc khác`);
     m.font = Font.systemFont(10); m.textColor = new Color("#94a3b8");
@@ -154,29 +245,82 @@ async function buildWidget(date) {
   return w;
 }
 
+// ---- Đánh dấu hoàn thành ----
+async function showWidget(date) {
+  const w = await buildWidget(date);
+  if (config.widgetFamily === "small") await w.presentSmall();
+  else if (config.widgetFamily === "large") await w.presentLarge();
+  else await w.presentMedium();
+}
+async function toggleFromURL(param) {
+  let req;
+  try { req = JSON.parse(param); } catch (e) { return; }
+  if (!req || !req.act) return;
+  await appendAction(req.act, req.done);
+  const n = new Notification();
+  n.title = req.done ? "✅ Đã đánh dấu hoàn thành" : "↩️ Đã bỏ đánh dấu";
+  n.body = (req.act.label || "") + " — sẽ đồng bộ về app Mac";
+  n.sound = null;
+  await n.schedule();
+  await showWidget(readFocus());
+}
+async function pickToComplete(date) {
+  const courses = await loadCourses();
+  if (!courses) return;
+  const { items } = workFor(courses, date);
+  const pending = items.filter((it) => it.act && !it.done);
+  const a = new Alert();
+  a.title = "Đánh dấu hoàn thành";
+  a.message = pending.length ? `Việc ngày ${vn(date)} — chọn việc đã xong` : "Không còn việc nào chưa xong.";
+  pending.forEach((it) => a.addAction(`${STAGES[it.stage].label} · ${it.name} — ${it.detail}`));
+  a.addCancelAction("Đóng");
+  const i = await a.presentSheet();
+  if (i >= 0) {
+    await appendAction(pending[i].act, true);
+    await showWidget(date);
+  }
+}
+async function undoLast() {
+  const actions = await loadActions();
+  const last = actions.length ? actions[actions.length - 1] : null;
+  if (!last || !last.done) {
+    const a = new Alert(); a.title = "Không có việc nào để hoàn tác"; a.addCancelAction("Đóng"); await a.presentAlert();
+    return;
+  }
+  await appendAction(last, false);
+  await showWidget(readFocus());
+}
+
 // ---- Chạy ----
 if (config.runsInWidget) {
   Script.setWidget(await buildWidget(readFocus()));
+} else if (args.queryParameters && args.queryParameters.toggle) {
+  await toggleFromURL(args.queryParameters.toggle);
 } else {
-  // Bấm vào widget (hoặc chạy trong app): chọn ngày
+  // Bấm vào widget (hoặc chạy trong app): chọn ngày / đánh dấu hoàn thành
   const a = new Alert();
-  a.title = "Xem tải công việc";
+  a.title = "Tải công việc";
   a.message = `Đang xem: ${vn(readFocus())}`;
   a.addAction("Hôm nay");
   a.addAction("Ngày mai");
   a.addAction("Chọn ngày khác…");
+  a.addAction("✅ Đánh dấu hoàn thành…");
+  a.addAction("↩️ Hoàn tác việc vừa xong");
   a.addCancelAction("Đóng");
   const i = await a.presentSheet();
-  if (i >= 0) {
+  if (i >= 0 && i <= 2) {
     let d = null;
     if (i === 0) d = today();
     else if (i === 1) d = addDays(today(), 1);
     else if (i === 2) { try { d = toStr(await DatePicker.pickDate(fromStr(readFocus()))); } catch (e) {} }
     if (d) {
       writeFocus(d);
-      const w = await buildWidget(d);
-      await w.presentMedium();
+      await showWidget(d);
     }
+  } else if (i === 3) {
+    await pickToComplete(readFocus());
+  } else if (i === 4) {
+    await undoLast();
   }
 }
 Script.complete();
