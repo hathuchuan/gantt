@@ -32,30 +32,31 @@
       --warning: #f59e0b;
       --success: #10b981;
 
-      /* Màu dòng xen kẽ: Trắng vs Xanh nhạt */
-      --row-even-bg: #ffffff;
-      --row-odd-bg: #eaf4ff;
       --row-hover-bg: #dbeafe;
 
-      /* Màu dòng dự án ĐÃ HOÀN THÀNH (Tô đỏ) */
-      --row-completed-bg: #fee2e2;
-      --row-completed-hover: #fecaca;
-      --row-completed-border: #ef4444;
+      /* Màu dòng theo loại dự án: a/b là hai sắc độ cùng tông để phân biệt hai dòng liền kề cùng loại */
+      --row-fsb-a: #eff6ff;     --row-fsb-b: #dbeafe;     --row-fsb-h: #bfdbfe;     --row-fsb-accent: #2563eb;
+      --row-rmit-a: #fef2f2;    --row-rmit-b: #fee2e2;    --row-rmit-h: #fecaca;    --row-rmit-accent: #dc2626;
+      --row-outlook-a: #fff1f7; --row-outlook-b: #fce7f3; --row-outlook-h: #fbcfe8; --row-outlook-accent: #f472b6;
+      --row-nc-a: #f5f3ff;      --row-nc-b: #ede9fe;      --row-nc-h: #ddd6fe;      --row-nc-accent: #7c3aed;
+      --row-tv-a: #ecfdf5;      --row-tv-b: #d1fae5;      --row-tv-h: #a7f3d0;      --row-tv-accent: #059669;
+      /* Dự án ĐÃ HOÀN THÀNH: xám */
+      --row-done-a: #f1f5f9;    --row-done-b: #e2e8f0;    --row-done-h: #cbd5e1;    --row-done-accent: #64748b;
 
-      /* Phân loại: MBA (Xanh dương) */
-      --cat-mba-bg: #eff6ff;
-      --cat-mba-text: #1d4ed8;
-      --cat-mba-border: #93c5fd;
+      /* Phân loại: FSB (Xanh dương) */
+      --cat-fsb-bg: #eff6ff;
+      --cat-fsb-text: #1d4ed8;
+      --cat-fsb-border: #93c5fd;
 
-      /* Phân loại: ĐH (Hồng Rose) */
-      --cat-dh-bg: #FFF1F2;
-      --cat-dh-text: #BE123C;
-      --cat-dh-border: #FB7185;
+      /* Phân loại: RMIT (Đỏ) */
+      --cat-rmit-bg: #fef2f2;
+      --cat-rmit-text: #b91c1c;
+      --cat-rmit-border: #fca5a5;
 
-      /* Phân loại: Đào tạo DN (Xám) */
-      --cat-dn-bg: #f1f5f9;
-      --cat-dn-text: #475569;
-      --cat-dn-border: #cbd5e1;
+      /* Phân loại: Outlook (Hồng nhạt) */
+      --cat-outlook-bg: #fdf2f8;
+      --cat-outlook-text: #be185d;
+      --cat-outlook-border: #f9a8d4;
 
       /* Phân loại: Nghiên cứu (Tím) */
       --cat-nc-bg: #f5f3ff;
@@ -80,7 +81,7 @@
       --teach-term: #0ea5e9;
       --teach-term-bg: #e0f2fe;
       --teach-term-hover: #bae6fd;
-      --completed-text: #991b1b;
+      --completed-text: #475569;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -246,8 +247,8 @@
       background: #f8fafc;
     }
     .countdown-item.is-completed-item {
-      background: #fee2e2;
-      border-color: #fca5a5;
+      background: #e2e8f0;
+      border-color: #94a3b8;
     }
     .countdown-item:last-child { margin-bottom: 0; }
     .countdown-badge {
@@ -301,6 +302,65 @@
     .workload-list li.wl-deliv  { color: #a16207; }
     .workload-list li.wl-teach-today { background: #fef08a; color: #713f12; border-radius: 5px; padding: 1px 6px; margin-left: -6px; }
 
+
+    /* ===== TÌM KIẾM TOÀN CỤC & BỘ LỌC ===== */
+    .search-row { flex-basis: 100%; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .search-box { position: relative; flex: 1 1 320px; min-width: 240px; max-width: 560px; }
+    .search-box .form-control { width: 100%; }
+    .search-row select.form-control { width: auto; padding: 5px 8px; font-size: 11px; }
+    .search-results {
+      position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 1300; max-height: 380px; overflow-y: auto;
+      background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 12px 28px rgba(15, 23, 42, 0.22);
+      font-size: 12px;
+    }
+    .search-hit { display: flex; gap: 8px; align-items: baseline; padding: 6px 10px; cursor: pointer; border-bottom: 1px solid var(--border-light); }
+    .search-hit:last-child { border-bottom: none; }
+    .search-hit:hover, .search-hit.active { background: var(--row-hover-bg); }
+    .search-hit .sh-tag { font-size: 9px; font-weight: 700; padding: 1px 6px; border-radius: 4px; white-space: nowrap; }
+    .search-hit .sh-main { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .search-hit .sh-date { color: var(--text-muted); font-size: 11px; white-space: nowrap; }
+    .search-empty { padding: 10px; color: var(--text-muted); }
+    .search-count { font-size: 11px; color: var(--text-muted); white-space: nowrap; }
+
+    /* ===== CẢNH BÁO XUNG ĐỘT LỊCH / QUÁ TẢI TUẦN ===== */
+    .conflict-box {
+      margin-top: 8px; padding: 7px 9px; border: 1px solid #fca5a5; border-left: 4px solid #dc2626;
+      background: #fef2f2; border-radius: 8px; font-size: 11px;
+    }
+    .conflict-box .conflict-title { font-weight: 700; color: #b91c1c; display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+    .conflict-box ul { margin: 4px 0 0; padding-left: 18px; max-height: 150px; overflow-y: auto; line-height: 1.6; }
+    .conflict-box li { cursor: pointer; }
+    .conflict-box li:hover { text-decoration: underline; }
+    .conflict-box li.cf-week { color: #b45309; }
+    .day-header-cell.week-overload { box-shadow: inset 0 3px 0 #f59e0b; }
+    .week-overload-dot { position: absolute; top: 1px; left: 1px; font-size: 9px; line-height: 1; }
+    .bar.bar-conflict { outline: 2px solid #dc2626; outline-offset: 1px; }
+    .bar .conflict-badge { font-size: 10px; flex-shrink: 0; text-decoration: none; }
+
+    /* ===== KÉO-THẢ / ĐỔI ĐỘ DÀI KHỐI ===== */
+    .bar.can-drag { cursor: grab; }
+    .bar.dragging { cursor: grabbing; transition: none !important; z-index: 70; opacity: 0.92; box-shadow: 0 6px 14px rgba(0,0,0,0.35); }
+    .bar .bar-handle { position: absolute; top: 0; bottom: 0; width: 7px; cursor: ew-resize; z-index: 2; }
+    .bar .bar-handle-l { left: 0; }
+    .bar .bar-handle-r { right: 0; }
+    .bar:hover .bar-handle { background: rgba(255,255,255,0.35); }
+    body.is-dragging-bar { cursor: grabbing; user-select: none; }
+    body.is-dragging-bar .bar { pointer-events: none; }
+    body.is-dragging-bar .bar.dragging { pointer-events: auto; }
+
+    /* ===== THÔNG BÁO NHỎ ===== */
+    .app-toast {
+      position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%) translateY(20px); opacity: 0; pointer-events: none;
+      background: #0f172a; color: #fff; padding: 8px 16px; border-radius: 8px; font-size: 12px; font-weight: 600;
+      box-shadow: 0 8px 22px rgba(0,0,0,0.3); z-index: 3000; transition: opacity 0.2s, transform 0.2s;
+    }
+    .app-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    /* Dòng công việc trong ô Tải công việc: nhấp = ghi chú Markdown, chuột phải = tùy chọn */
+    .workload-list li[data-course-id] { cursor: pointer; }
+    .workload-list li[data-course-id]:hover { text-decoration: underline; }
+    .workload-list li .wl-note { margin-left: 4px; font-size: 10px; }
+
     /* Cảnh báo khối công việc quá ngày mà chưa hoàn thành */
     .overdue-box {
       margin-top: 8px; padding: 7px 9px; border: 1px solid #fdba74; border-left: 4px solid #f59e0b;
@@ -308,8 +368,6 @@
     }
     .overdue-box .overdue-title { font-weight: 700; color: #b45309; }
     .overdue-box .workload-list { max-height: 150px; overflow-y: auto; }
-    .overdue-box .workload-list li { cursor: pointer; }
-    .overdue-box .workload-list li:hover { text-decoration: underline; }
     .overdue-late { color: #dc2626; font-weight: 700; }
     .bar.is-overdue {
       outline: 2px dashed #f59e0b; outline-offset: 1px; animation: overduePulse 2s infinite;
@@ -519,17 +577,17 @@
     }
 
     .cat-tag-all { background: #0f172a; color: #ffffff; border: 1px solid #0f172a; }
-    .cat-tag-mba { background: var(--cat-mba-bg); color: var(--cat-mba-text); border: 1px solid var(--cat-mba-border); }
-    .cat-tag-dh  { background: var(--cat-dh-bg); color: var(--cat-dh-text); border: 1px solid var(--cat-dh-border); }
-    .cat-tag-dn  { background: var(--cat-dn-bg); color: var(--cat-dn-text); border: 1px solid var(--cat-dn-border); }
+    .cat-tag-fsb { background: var(--cat-fsb-bg); color: var(--cat-fsb-text); border: 1px solid var(--cat-fsb-border); }
+    .cat-tag-rmit { background: var(--cat-rmit-bg); color: var(--cat-rmit-text); border: 1px solid var(--cat-rmit-border); }
+    .cat-tag-outlook { background: var(--cat-outlook-bg); color: var(--cat-outlook-text); border: 1px solid var(--cat-outlook-border); }
     .cat-tag-nc  { background: var(--cat-nc-bg); color: var(--cat-nc-text); border: 1px solid var(--cat-nc-border); }
     .cat-tag-tv  { background: var(--cat-tv-bg); color: var(--cat-tv-text); border: 1px solid var(--cat-tv-border); }
 
     /* TAG ĐÃ HOÀN THÀNH */
     .cat-tag-completed {
-      background: #dc2626;
+      background: #64748b;
       color: #ffffff;
-      border: 1px solid #991b1b;
+      border: 1px solid #475569;
       font-weight: 700;
       font-size: 9px;
       padding: 1px 6px;
@@ -692,22 +750,17 @@
       border-bottom: 1px solid #cbd5e1;
       align-items: center;
     }
-    .gantt-row-wrapper.row-even,
-    .gantt-row-wrapper.row-even .timeline-canvas {
-      background-color: var(--row-even-bg);
-    }
-    .gantt-row-wrapper.row-odd,
-    .gantt-row-wrapper.row-odd .timeline-canvas {
-      background-color: var(--row-odd-bg);
-    }
-    .gantt-row-wrapper.row-completed,
-    .gantt-row-wrapper.row-completed .timeline-canvas {
-      background-color: var(--row-completed-bg) !important;
-      border-bottom-color: #fca5a5;
-    }
-    .gantt-fixed-sidebar .gantt-row-wrapper.row-completed {
-      border-left: 5px solid var(--row-completed-border);
-    }
+    .gantt-row-wrapper.row-t-fsb     { --row-a: var(--row-fsb-a);     --row-b: var(--row-fsb-b);     --row-h: var(--row-fsb-h);     --row-accent: var(--row-fsb-accent); }
+    .gantt-row-wrapper.row-t-rmit    { --row-a: var(--row-rmit-a);    --row-b: var(--row-rmit-b);    --row-h: var(--row-rmit-h);    --row-accent: var(--row-rmit-accent); }
+    .gantt-row-wrapper.row-t-outlook { --row-a: var(--row-outlook-a); --row-b: var(--row-outlook-b); --row-h: var(--row-outlook-h); --row-accent: var(--row-outlook-accent); }
+    .gantt-row-wrapper.row-t-nc      { --row-a: var(--row-nc-a);      --row-b: var(--row-nc-b);      --row-h: var(--row-nc-h);      --row-accent: var(--row-nc-accent); }
+    .gantt-row-wrapper.row-t-tv      { --row-a: var(--row-tv-a);      --row-b: var(--row-tv-b);      --row-h: var(--row-tv-h);      --row-accent: var(--row-tv-accent); }
+    .gantt-row-wrapper.row-t-done    { --row-a: var(--row-done-a);    --row-b: var(--row-done-b);    --row-h: var(--row-done-h);    --row-accent: var(--row-done-accent); }
+    .gantt-row-wrapper.row-v0,
+    .gantt-row-wrapper.row-v0 .timeline-canvas { background-color: var(--row-a); }
+    .gantt-row-wrapper.row-v1,
+    .gantt-row-wrapper.row-v1 .timeline-canvas { background-color: var(--row-b); }
+    .gantt-fixed-sidebar .gantt-row-wrapper[class*="row-t-"] { border-left: 5px solid var(--row-accent); }
     .gantt-row-wrapper.row-session {
       height: 44px;
       min-height: 44px;
@@ -715,11 +768,7 @@
     }
     .gantt-row-wrapper:hover,
     .gantt-row-wrapper:hover .timeline-canvas {
-      background-color: var(--row-hover-bg) !important;
-    }
-    .gantt-row-wrapper.row-completed:hover,
-    .gantt-row-wrapper.row-completed:hover .timeline-canvas {
-      background-color: var(--row-completed-hover) !important;
+      background-color: var(--row-h, var(--row-hover-bg)) !important;
     }
 
     .row-label-cell {
@@ -846,20 +895,20 @@
       50% { box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.85); }
     }
 
-    /* MBA Themes */
-    .bar-macro-mba  { background: #1e40af; border-left: 3px solid #bfdbfe; }
-    .bar-prep-mba   { background: #60a5fa; color: #0f172a; }
-    .bar-teach-mba  { background: #1d4ed8; }
+    /* FSB (Xanh dương) */
+    .bar-macro-fsb  { background: #1e40af; border-left: 3px solid #bfdbfe; }
+    .bar-prep-fsb   { background: #60a5fa; color: #0f172a; }
+    .bar-teach-fsb  { background: #1d4ed8; }
 
-    /* ĐH Themes (Hồng Rose) */
-    .bar-macro-dh   { background: #BE123C; border-left: 3px solid #FFF1F2; }
-    .bar-prep-dh    { background: #FDA4AF; color: #0f172a; }
-    .bar-teach-dh   { background: #FB7185; }
+    /* RMIT (Đỏ) */
+    .bar-macro-rmit { background: #991b1b; border-left: 3px solid #fecaca; }
+    .bar-prep-rmit  { background: #fca5a5; color: #0f172a; }
+    .bar-teach-rmit { background: #dc2626; }
 
-    /* Doanh nghiệp Themes (Xám) */
-    .bar-macro-dn   { background: #334155; border-left: 3px solid #cbd5e1; }
-    .bar-prep-dn    { background: #94a3b8; color: #0f172a; }
-    .bar-teach-dn   { background: #64748b; }
+    /* Outlook (Hồng nhạt) */
+    .bar-macro-outlook { background: #f472b6; border-left: 3px solid #fdf2f8; color: #500724; }
+    .bar-prep-outlook  { background: #fbcfe8; color: #500724; }
+    .bar-teach-outlook { background: #f9a8d4; color: #500724; }
 
     /* Nghiên cứu (Tím) */
     .bar-nc-submit  { background: #7c3aed; border: 1.5px solid #ddd6fe; }
@@ -1085,16 +1134,13 @@
     }
 
     /* ===== LỚP ĐANG GIẢNG HÔM NAY / ĐANG TRONG KỲ GIẢNG DẠY (cột trái) ===== */
+    /* Giữ màu nền theo loại dự án; chỉ thêm viền/dải màu để nhận ra lớp giảng hôm nay / trong kỳ */
     .gantt-fixed-sidebar .gantt-row-wrapper.row-teach-today {
-      background-color: var(--teach-today-bg) !important;
-      box-shadow: inset 5px 0 0 var(--teach-today);
+      box-shadow: inset 5px 0 0 var(--teach-today), inset 0 0 0 2px var(--teach-today);
     }
-    .gantt-fixed-sidebar .gantt-row-wrapper.row-teach-today:hover { background-color: var(--teach-today-hover) !important; }
     .gantt-fixed-sidebar .gantt-row-wrapper.row-teach-term {
-      background-color: var(--teach-term-bg) !important;
-      box-shadow: inset 5px 0 0 var(--teach-term);
+      box-shadow: inset 5px 0 0 var(--teach-term), inset 0 0 0 1px var(--teach-term);
     }
-    .gantt-fixed-sidebar .gantt-row-wrapper.row-teach-term:hover { background-color: var(--teach-term-hover) !important; }
     .teach-tag {
       display: inline-block; font-size: 9px; font-weight: 700; line-height: 14px; padding: 0 6px;
       border-radius: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 190px;
@@ -1174,17 +1220,22 @@
       --bg-body: #0b1220; --bg-card: #111a2e; --border: #334155; --border-light: #243049;
       --text: #e2e8f0; --text-muted: #94a3b8; --primary: #3b82f6; --primary-hover: #60a5fa;
       --danger: #f87171; --success: #34d399;
-      --row-even-bg: #111a2e; --row-odd-bg: #15213a; --row-hover-bg: #1e3357;
-      --row-completed-bg: #3b1620; --row-completed-hover: #4c1d2a; --row-completed-border: #f87171;
-      --cat-mba-bg: #172554; --cat-mba-text: #93c5fd; --cat-mba-border: #1d4ed8;
-      --cat-dh-bg: #4c0519; --cat-dh-text: #FDA4AF; --cat-dh-border: #BE123C;
-      --cat-dn-bg: #1e293b; --cat-dn-text: #cbd5e1; --cat-dn-border: #64748b;
+      --row-hover-bg: #1e3357;
+      --row-fsb-a: #0f1d3d;     --row-fsb-b: #14285a;     --row-fsb-h: #1e3a8a;     --row-fsb-accent: #3b82f6;
+      --row-rmit-a: #2a1215;    --row-rmit-b: #3b1a1f;    --row-rmit-h: #5a2128;    --row-rmit-accent: #ef4444;
+      --row-outlook-a: #2e1424; --row-outlook-b: #3d1a30; --row-outlook-h: #5b2547; --row-outlook-accent: #f472b6;
+      --row-nc-a: #1f1646;      --row-nc-b: #2a1d5c;      --row-nc-h: #3b2a80;      --row-nc-accent: #8b5cf6;
+      --row-tv-a: #0a2a20;      --row-tv-b: #0f3a2c;      --row-tv-h: #14523d;      --row-tv-accent: #10b981;
+      --row-done-a: #1a2233;    --row-done-b: #232d42;    --row-done-h: #334155;    --row-done-accent: #94a3b8;
+      --cat-fsb-bg: #172554; --cat-fsb-text: #93c5fd; --cat-fsb-border: #1d4ed8;
+      --cat-rmit-bg: #450a0a; --cat-rmit-text: #fca5a5; --cat-rmit-border: #b91c1c;
+      --cat-outlook-bg: #500724; --cat-outlook-text: #f9a8d4; --cat-outlook-border: #be185d;
       --cat-nc-bg: #2e1f5a; --cat-nc-text: #c4b5fd; --cat-nc-border: #6d28d9;
       --cat-tv-bg: #0b3a2c; --cat-tv-text: #6ee7b7; --cat-tv-border: #047857;
       --today-bg: rgba(244, 114, 182, 0.22); --today-text: #f9a8d4;
       --teach-today: #22c55e; --teach-today-bg: #0f3a25; --teach-today-hover: #14532d;
       --teach-term: #38bdf8; --teach-term-bg: #0c2d44; --teach-term-hover: #0f3d5c;
-      --completed-text: #fca5a5;
+      --completed-text: #94a3b8;
     }
     [data-theme="dark"] [style*="color:#b91c1c"],
     [data-theme="dark"] [style*="color:#991b1b"] { color: #fca5a5 !important; }
@@ -1194,9 +1245,11 @@
     [data-theme="dark"] [style*="color:#5b21b6"] { color: #c4b5fd !important; }
     [data-theme="dark"] [style*="color:#334155"] { color: #cbd5e1 !important; }
     [data-theme="dark"] [style*="color:#0f172a"] { color: var(--text) !important; }
-    [data-theme="dark"] .bar-prep-mba,
-    [data-theme="dark"] .bar-prep-dh,
-    [data-theme="dark"] .bar-prep-dn { color: #0f172a !important; }
+    [data-theme="dark"] .bar-prep-fsb,
+    [data-theme="dark"] .bar-prep-rmit { color: #0f172a !important; }
+    [data-theme="dark"] .bar-macro-outlook,
+    [data-theme="dark"] .bar-prep-outlook,
+    [data-theme="dark"] .bar-teach-outlook { color: #500724 !important; }
     [data-theme="dark"] .header-title h1 { color: var(--text); }
     [data-theme="dark"] .save-status.ok { color: #34d399; }
     [data-theme="dark"] .btn-secondary { background: #1b2740; color: var(--text); border-color: var(--border); }
@@ -1217,7 +1270,7 @@
     [data-theme="dark"] .alert-box.normal .congestion-list { color: #cbd5e1; border-top-color: #334155; }
     [data-theme="dark"] .countdown-sidebar-card { background: var(--bg-card); }
     [data-theme="dark"] .countdown-item { background: #15213a; }
-    [data-theme="dark"] .countdown-item.is-completed-item { background: #3b1620; border-color: #7f1d1d; }
+    [data-theme="dark"] .countdown-item.is-completed-item { background: #232d42; border-color: #475569; }
     [data-theme="dark"] .countdown-badge.review { background: #3a2c0b; color: #fcd34d; border-color: #92400e; }
     [data-theme="dark"] .countdown-badge.rejected { background: #1b2740; color: #cbd5e1; border-color: #475569; }
     [data-theme="dark"] .workload-list li.wl-macro { color: #c4b5fd; }
@@ -1262,7 +1315,6 @@
     [data-theme="dark"] .day-header-cell.workload-focus-day { color: #93c5fd; }
     [data-theme="dark"] .gantt-row-wrapper { border-bottom-color: #243049; }
     [data-theme="dark"] .gantt-row-wrapper.row-session { border-bottom-color: #334155; }
-    [data-theme="dark"] .gantt-row-wrapper.row-completed { border-bottom-color: #7f1d1d; }
     [data-theme="dark"] .grid-day-col { border-right-color: rgba(71, 85, 105, 0.5); }
     [data-theme="dark"] .grid-day-col.weekend { background-color: rgba(148, 163, 184, 0.08); }
     [data-theme="dark"] .grid-day-col.month-sep { border-right-color: #475569; }
@@ -1297,6 +1349,11 @@
     [data-theme="dark"] [style*="color:#64748b"] { color: #94a3b8 !important; }
     [data-theme="dark"] [style*="color:#059669"] { color: #34d399 !important; }
     [data-theme="dark"] .tooltip { background: #1e293b; border-color: #475569; }
+    [data-theme="dark"] .conflict-box { background: #2a1218; border-color: #7f1d1d; }
+    [data-theme="dark"] .conflict-box .conflict-title { color: #fca5a5; }
+    [data-theme="dark"] .conflict-box li.cf-week { color: #fbbf24; }
+    [data-theme="dark"] .search-results { background: #111a2e; border-color: #334155; }
+    [data-theme="dark"] .app-toast { background: #e2e8f0; color: #0f172a; }
   </style>
 </head>
 <body>
@@ -1309,7 +1366,7 @@
     <div class="header-actions">
       <span id="saveStatus" class="save-status" style="display:none;"></span>
       <span id="macAutoStatus" class="auto-sync-status" style="display:none;" onclick="runMacAutoSync(true)" title="Bấm để cập nhật từ Apple Calendar ngay"></span>
-      <button type="button" class="btn btn-secondary" id="btnTheme" onclick="toggleTheme()" title="Chuyển giao diện Sáng / Tối">🌙 Tối</button>
+      <button type="button" class="btn btn-secondary" id="btnTheme" onclick="toggleTheme()" title="Giao diện: Tự động theo macOS → Sáng → Tối">🌗 Tự động</button>
       <button type="button" class="btn btn-secondary" id="btnBlockedRegistry" onclick="clearDeletedBlocklist()" title="Bấm để xem, khôi phục hoặc bỏ chặn các dự án đã xóa">
         🚫 Đã chặn xóa (0)
       </button>
@@ -1353,6 +1410,7 @@
         </div>
         <div id="congestionDetails" class="congestion-list" style="display:none;"></div>
         <div id="overdueAlertBox" class="overdue-box" style="display:none;"></div>
+        <div id="conflictAlertBox" class="conflict-box" style="display:none;"></div>
       </div>
 
       <!-- 2. SECTION RIÊNG TRÊN SIDEBAR: NGHIÊN CỨU & TƯ VẤN -->
@@ -1379,10 +1437,10 @@
           <div class="form-group">
             <label>Phân loại dự án</label>
             <select id="commonCategory" class="form-control" onchange="handleCategoryModeChange()">
-              <option value="Giảng dạy MBA">Giảng dạy MBA (Xanh dương)</option>
-              <option value="Giảng dạy ĐH">Giảng dạy Đại học (Hồng Rose)</option>
-              <option value="Đào tạo DN">Đào tạo Doanh nghiệp (Xám)</option>
-              <option value="Nghiên cứu">Nghiên cứu (Đếm ngược Submit)</option>
+              <option value="FSB">FSB (Xanh dương)</option>
+              <option value="RMIT">RMIT (Đỏ)</option>
+              <option value="Outlook">Outlook (Hồng nhạt)</option>
+              <option value="Nghiên cứu">Nghiên cứu (Tím · Đếm ngược Submit)</option>
               <option value="Tư vấn doanh nghiệp">Tư vấn doanh nghiệp (Deadline)</option>
             </select>
           </div>
@@ -1569,15 +1627,36 @@
     <!-- CỘT PHẢI: BIỂU ĐỒ GANTT -->
     <div class="gantt-section">
       <div class="toolbar">
+        <!-- TÌM KIẾM TOÀN CỤC + LỌC THEO TRẠNG THÁI / ĐỊA ĐIỂM -->
+        <div class="search-row">
+          <div class="search-box">
+            <input type="search" id="globalSearch" class="form-control" placeholder="🔍 Tìm toàn cục: dự án, buổi, địa điểm, ghi chú…  (⌘F)" autocomplete="off" oninput="onGlobalSearchInput()" onfocus="onGlobalSearchInput()">
+            <div id="searchResults" class="search-results" style="display:none;"></div>
+          </div>
+          <select id="filterStatus" class="form-control" onchange="onFilterChange()" title="Lọc theo trạng thái">
+            <option value="all">Trạng thái: tất cả</option>
+            <option value="notdone">⏳ Chưa hoàn thành</option>
+            <option value="ongoing">🔥 Đang diễn ra</option>
+            <option value="upcoming">⏭ Sắp tới</option>
+            <option value="overdue">⚠️ Quá hạn</option>
+            <option value="review">📨 Chờ review / Rejected</option>
+            <option value="done">✅ Đã hoàn thành</option>
+          </select>
+          <select id="filterLocation" class="form-control" onchange="onFilterChange()" title="Lọc theo địa điểm giảng dạy">
+            <option value="all">Địa điểm: tất cả</option>
+          </select>
+          <button type="button" class="btn btn-secondary btn-sm" id="btnClearFilters" onclick="clearAllFilters()" style="display:none;">✕ Bỏ lọc</button>
+          <span class="search-count" id="searchCount"></span>
+        </div>
         <!-- CÁC NÚT BẤM FILTER THEO PHÂN LOẠI + NÚT ALL -->
         <div class="category-legend" id="categoryFilterBar">
           <span style="font-weight:700; color:#475569; margin-right:2px;">Phân loại:</span>
           <button type="button" class="cat-tag filter-chip cat-tag-all active-filter" id="filterChip_all" onclick="setCategoryFilter('all')">All</button>
-          <button type="button" class="cat-tag filter-chip cat-tag-mba" id="filterChip_mba" onclick="setCategoryFilter('mba')">MBA</button>
-          <button type="button" class="cat-tag filter-chip cat-tag-dh" id="filterChip_dh" onclick="setCategoryFilter('dh')">Đại Học</button>
-          <button type="button" class="cat-tag filter-chip cat-tag-dn" id="filterChip_dn" onclick="setCategoryFilter('dn')">Đào Tạo DN</button>
-          <button type="button" class="cat-tag filter-chip cat-tag-nc" id="filterChip_nc" onclick="setCategoryFilter('nc')">Nghiên Cứu (Submit)</button>
-          <button type="button" class="cat-tag filter-chip cat-tag-tv" id="filterChip_tv" onclick="setCategoryFilter('tv')">Tư Vấn DN (Deadline)</button>
+          <button type="button" class="cat-tag filter-chip cat-tag-fsb" id="filterChip_fsb" onclick="setCategoryFilter('fsb')">FSB</button>
+          <button type="button" class="cat-tag filter-chip cat-tag-rmit" id="filterChip_rmit" onclick="setCategoryFilter('rmit')">RMIT</button>
+          <button type="button" class="cat-tag filter-chip cat-tag-outlook" id="filterChip_outlook" onclick="setCategoryFilter('outlook')">Outlook</button>
+          <button type="button" class="cat-tag filter-chip cat-tag-nc" id="filterChip_nc" onclick="setCategoryFilter('nc')">Nghiên Cứu</button>
+          <button type="button" class="cat-tag filter-chip cat-tag-tv" id="filterChip_tv" onclick="setCategoryFilter('tv')">Tư Vấn DN</button>
         </div>
 
         <div class="toolbar-actions-right">
@@ -1691,9 +1770,9 @@
         <div class="form-group">
           <label>Phân loại</label>
           <select id="editCourseCategory" class="form-control" onchange="handleEditCategorySwitch()">
-            <option value="Giảng dạy MBA">Giảng dạy MBA (Xanh dương)</option>
-            <option value="Giảng dạy ĐH">Giảng dạy Đại học (Hồng Rose)</option>
-            <option value="Đào tạo DN">Đào tạo Doanh nghiệp (Xám)</option>
+            <option value="FSB">FSB (Xanh dương)</option>
+            <option value="RMIT">RMIT (Đỏ)</option>
+            <option value="Outlook">Outlook (Hồng nhạt)</option>
             <option value="Nghiên cứu">Nghiên cứu (Submit lần 1, 2...)</option>
             <option value="Tư vấn doanh nghiệp">Tư vấn doanh nghiệp (Deadline)</option>
           </select>
@@ -1889,6 +1968,7 @@
   </div>
 </div>
 
+<div class="app-toast" id="appToast" role="status"></div>
 <div class="tooltip" id="tooltip"></div>
 <div class="ctx-menu" id="ctxMenu" role="menu"></div>
 
@@ -2092,22 +2172,40 @@
     return { micro: 2 };
   }
 
-  function getCategoryTheme(catName) {
-    if (!catName) return 'mba';
-    var lower = String(catName).toLowerCase();
+  // Phân loại: FSB (xanh dương) · RMIT (đỏ) · Outlook (hồng nhạt) · Nghiên cứu (tím) · Tư vấn doanh nghiệp (xanh lá).
+  // Dữ liệu cũ (Giảng dạy MBA / ĐH / Đào tạo DN) được quy về FSB / RMIT theo tiền tố tên dự án, còn lại là Outlook.
+  var THEME_LABELS = { fsb: 'FSB', rmit: 'RMIT', outlook: 'Outlook', nc: 'Nghiên cứu', tv: 'Tư vấn doanh nghiệp' };
+  var THEME_CATEGORY_OPTIONS = ['FSB', 'RMIT', 'Outlook', 'Nghiên cứu', 'Tư vấn doanh nghiệp'];
+
+  function themeFromNamePrefix(name) {
+    var m = /^\s*(fsb|rmit)(?![a-z0-9])/i.exec(String(name || ''));
+    return m ? m[1].toLowerCase() : null;
+  }
+
+  function getCategoryTheme(catName, courseName) {
+    var lower = String(catName || '').trim().toLowerCase();
     if (lower.indexOf('tư vấn') !== -1) return 'tv';
     if (lower.indexOf('nghiên cứu') !== -1 || lower.indexOf('đề tài') !== -1) return 'nc';
-    if (lower.indexOf('đh') !== -1 || lower.indexOf('đại học') !== -1) return 'dh';
-    if (lower.indexOf('doanh nghiệp') !== -1 || lower.indexOf('đào tạo dn') !== -1 || lower.indexOf('dn') !== -1) return 'dn';
-    return 'mba';
+    if (lower === 'fsb') return 'fsb';
+    if (lower === 'rmit') return 'rmit';
+    if (lower === 'outlook') return 'outlook';
+    return themeFromNamePrefix(courseName) || 'outlook';
+  }
+
+  function getCourseTheme(c) {
+    return getCategoryTheme(c && c.category, c && c.name);
+  }
+
+  function canonicalCategory(catName, courseName) {
+    return THEME_LABELS[getCategoryTheme(catName, courseName)];
   }
 
   function isResearchCourse(c) {
-    return c && getCategoryTheme(c.category) === 'nc';
+    return c && getCourseTheme(c) === 'nc';
   }
 
   function isConsultingCourse(c) {
-    return c && getCategoryTheme(c.category) === 'tv';
+    return c && getCourseTheme(c) === 'tv';
   }
 
   // Các giai đoạn chấm thi: idx 0 = c.evaluation, idx >= 1 = c.extraEvaluations[idx - 1]
@@ -2478,7 +2576,7 @@
       syncKey: generateSyncKey("Kinh tế học Quản trị - MBA K28"),
       originalName: "Kinh tế học Quản trị - MBA K28",
       name: "Kinh tế học Quản trị - MBA K28",
-      category: "Giảng dạy MBA",
+      category: "FSB",
       prepIntensity: "standard",
       hasEvaluation: true,
       macroDays: 7,
@@ -2540,7 +2638,7 @@
       safe.originalName = safe.originalName || safe.name;
       safe.syncKey = safe.syncKey ? generateSyncKey(safe.syncKey) : generateSyncKey(safe.originalName);
       safe.id = safe.id || hashSyncId(safe.syncKey || ('course_' + idx));
-      safe.category = safe.category || 'Giảng dạy MBA';
+      safe.category = canonicalCategory(safe.category, safe.name);
       safe.macroDays = (safe.macroDays !== undefined && safe.macroDays !== null && !isNaN(parseInt(safe.macroDays, 10))) ? parseInt(safe.macroDays, 10) : 7;
       safe.macroDone = !!safe.macroDone;
       safe.macroNote = safe.macroNote || '';
@@ -2771,6 +2869,102 @@
     };
   }
 
+  // =========================================================================
+  // 5b. CẢNH BÁO XUNG ĐỘT LỊCH: TRÙNG GIỜ GIẢNG & QUÁ TẢI TRONG TUẦN
+  // =========================================================================
+  var WEEK_LIMIT_KEY = 'academic_smart_gantt_week_limit';
+  var scheduleWarnings = { conflicts: [], weeks: [], weekByMonday: {} };
+
+  function getWeekLimitHours() {
+    var v = parseFloat(readStored(WEEK_LIMIT_KEY));
+    return v > 0 ? v : 12;
+  }
+
+  function setWeekLimitHours() {
+    var cur = getWeekLimitHours();
+    var v = prompt('Ngưỡng quá tải: số giờ giảng tối đa mỗi tuần (hiện tại ' + cur + ' giờ).\nTuần cũng bị cảnh báo khi có từ 3 lớp trở lên cùng chuẩn bị trong một ngày.', String(cur));
+    if (v === null) return;
+    var n = parseFloat(String(v).replace(',', '.'));
+    if (!(n > 0)) { alert('Hãy nhập một số giờ lớn hơn 0.'); return; }
+    writeStored(WEEK_LIMIT_KEY, String(n));
+    renderGantt();
+  }
+
+  function mondayOf(dateStr) {
+    var d = parseDateStr(dateStr);
+    return formatDateObjToStr(new Date(d.getFullYear(), d.getMonth(), d.getDate() - ((d.getDay() + 6) % 7)));
+  }
+
+  function computeScheduleWarnings(todayStr, days) {
+    var from = mondayOf(todayStr);
+    var limit = getWeekLimitHours();
+    var conflicts = [];
+    var weekMap = {};
+    for (var i = 0; i < days; i++) {
+      var ds = addDays(from, i);
+      var info = inspectDaySchedule(ds);
+      if (ds >= todayStr) {
+        info.conflicts.forEach(function(cf) { conflicts.push({ date: ds, a: cf.a, b: cf.b }); });
+      }
+      var mon = mondayOf(ds);
+      var w = weekMap[mon] || (weekMap[mon] = { start: mon, end: addDays(mon, 6), hours: 0, sessions: 0, maxPrep: 0, limit: limit });
+      info.teachingList.forEach(function(t) { w.hours += t.durationHours; w.sessions++; });
+      if (info.prepCourseCount > w.maxPrep) w.maxPrep = info.prepCourseCount;
+    }
+    var weeks = Object.keys(weekMap).sort().map(function(k) { return weekMap[k]; }).filter(function(w) {
+      w.overHours = w.hours > limit;
+      w.overPrep = w.maxPrep >= 3;
+      return w.end >= todayStr && (w.overHours || w.overPrep);
+    });
+    var byMonday = {};
+    weeks.forEach(function(w) { byMonday[w.start] = w; });
+    return { conflicts: conflicts, weeks: weeks, weekByMonday: byMonday };
+  }
+
+  function describeWeekOverload(w) {
+    var parts = [];
+    if (w.overHours) parts.push(w.hours + ' giờ giảng (> ' + w.limit + ' giờ), ' + w.sessions + ' buổi');
+    if (w.overPrep) parts.push('có ngày ' + w.maxPrep + ' lớp cùng chuẩn bị');
+    return parts.join('; ');
+  }
+
+  function updateConflictAlertBox() {
+    var box = document.getElementById('conflictAlertBox');
+    if (!box) return;
+    var w = scheduleWarnings;
+    var total = w.conflicts.length + w.weeks.length;
+    if (!total) {
+      box.style.display = 'none';
+      box.innerHTML = '';
+      return;
+    }
+    var html = '<div class="conflict-title"><span>🚨 Xung đột lịch (' + total + ')</span>' +
+      '<button type="button" class="btn btn-secondary btn-sm" data-act="limit" title="Đặt ngưỡng giờ giảng mỗi tuần">⚙️ Ngưỡng</button></div><ul>';
+    w.conflicts.slice(0, 30).forEach(function(cf) {
+      html += '<li data-date="' + cf.date + '">⏰ Trùng giờ ' + getDayNameVN(cf.date) + ' ' + formatVNDate(cf.date).slice(0, 5) + ': <strong>' +
+        escapeHtml(cf.a.courseName) + '</strong> (' + escapeHtml(cf.a.timeRange) + ') ↔ <strong>' + escapeHtml(cf.b.courseName) + '</strong> (' + escapeHtml(cf.b.timeRange) + ')</li>';
+    });
+    w.weeks.forEach(function(wk) {
+      html += '<li class="cf-week" data-date="' + wk.start + '">📊 Tuần ' + formatVNDate(wk.start).slice(0, 5) + ' → ' + formatVNDate(wk.end).slice(0, 5) + ': ' + escapeHtml(describeWeekOverload(wk)) + '</li>';
+    });
+    html += '</ul>';
+    box.innerHTML = html;
+    box.style.display = 'block';
+  }
+
+  function initConflictBox() {
+    var box = document.getElementById('conflictAlertBox');
+    if (!box) return;
+    box.addEventListener('click', function(e) {
+      if (e.target.closest('[data-act="limit"]')) { setWeekLimitHours(); return; }
+      var li = e.target.closest('li[data-date]');
+      if (!li) return;
+      var ds = li.getAttribute('data-date');
+      scrollToDate(ds);
+      setWorkloadFocusDate(ds);
+    });
+  }
+
   function openDayInspectorPopup(dateStr, dayOfWeekName, event) {
     if (event) event.stopPropagation();
     activeInspectedDate = dateStr;
@@ -2898,23 +3092,23 @@
   }
 
   function updateFilterToolbarUI() {
-    var keys = ['all', 'mba', 'dh', 'dn', 'nc', 'tv'];
-    var counts = { all: courses.length, mba: 0, dh: 0, dn: 0, nc: 0, tv: 0 };
+    var keys = ['all', 'fsb', 'rmit', 'outlook', 'nc', 'tv'];
+    var counts = { all: courses.length, fsb: 0, rmit: 0, outlook: 0, nc: 0, tv: 0 };
     var completedCount = 0;
 
     courses.forEach(function(c) {
-      var t = getCategoryTheme(c.category);
+      var t = getCourseTheme(c);
       if (counts[t] !== undefined) counts[t]++;
       if (isCourseFullyCompleted(c)) completedCount++;
     });
 
     var labels = {
       all: 'All (' + counts.all + ')',
-      mba: 'MBA (' + counts.mba + ')',
-      dh: 'Đại Học (' + counts.dh + ')',
-      dn: 'Đào Tạo DN (' + counts.dn + ')',
-      nc: 'Nghiên Cứu (Submit) (' + counts.nc + ')',
-      tv: 'Tư Vấn DN (Deadline) (' + counts.tv + ')'
+      fsb: 'FSB (' + counts.fsb + ')',
+      rmit: 'RMIT (' + counts.rmit + ')',
+      outlook: 'Outlook (' + counts.outlook + ')',
+      nc: 'Nghiên Cứu (' + counts.nc + ')',
+      tv: 'Tư Vấn DN (' + counts.tv + ')'
     };
 
     keys.forEach(function(k) {
@@ -2944,13 +3138,19 @@
       }
     }
 
+    updateLocationFilterOptions();
+    var clearBtn = document.getElementById('btnClearFilters');
+    if (clearBtn) clearBtn.style.display = hasActiveFilters() ? '' : 'none';
+    var countEl = document.getElementById('searchCount');
+    if (countEl) countEl.textContent = hasActiveFilters() ? ('Đang lọc: ' + getFilteredAndSortedCourses().length + '/' + courses.length + ' dự án') : '';
+
     var hintEl = document.getElementById('fixedSidebarFilterHint');
     if (hintEl) {
       var nameMap = {
         all: 'Click đầu cột ngày để xem chi tiết',
-        mba: 'Lọc: Giảng dạy MBA',
-        dh: 'Lọc: Giảng dạy Đại học',
-        dn: 'Lọc: Đào tạo Doanh nghiệp',
+        fsb: 'Lọc: FSB',
+        rmit: 'Lọc: RMIT',
+        outlook: 'Lọc: Outlook',
         nc: 'Lọc: Nghiên cứu',
         tv: 'Lọc: Tư vấn Doanh nghiệp'
       };
@@ -2960,11 +3160,233 @@
   }
 
   // =========================================================================
+  // 6b. TÌM KIẾM TOÀN CỤC & LỌC THEO TRẠNG THÁI / ĐỊA ĐIỂM
+  // =========================================================================
+  var filterState = { query: '', status: 'all', location: 'all' };
+  var searchActiveIdx = -1;
+
+  // Bỏ dấu + chữ thường để tìm "nghien cuu" ra "Nghiên cứu"
+  function foldText(str) {
+    return String(str || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[đĐ]/g, 'd').toLowerCase();
+  }
+
+  function courseLocations(c) {
+    var out = {};
+    if (isResearchCourse(c) || isConsultingCourse(c)) return [];
+    (c.sessions || []).forEach(function(s) {
+      var d = getDisplayLocation(s.locationType || c.locationType, s.locationCustom !== undefined ? s.locationCustom : c.locationCustom);
+      if (d) out[d] = true;
+    });
+    if (!(c.sessions || []).length) {
+      var d0 = getDisplayLocation(c.locationType, c.locationCustom);
+      if (d0) out[d0] = true;
+    }
+    return Object.keys(out);
+  }
+
+  function courseSearchText(c) {
+    var parts = [c.name, c.originalName, c.category, THEME_LABELS[getCourseTheme(c)], c.journalName, c.clientName, c.macroNote];
+    courseLocations(c).forEach(function(l) { parts.push(l); });
+    (c.sessions || []).forEach(function(s) { parts.push(s.title, s.note); });
+    (c.submissions || []).forEach(function(x) { parts.push(x.title, x.journal, x.note); });
+    (c.deliverables || []).forEach(function(x) { parts.push(x.title, x.note); });
+    getEvalStages(c).forEach(function(st) { parts.push(st.ev.name, st.ev.note); });
+    return foldText(parts.filter(Boolean).join(' \n '));
+  }
+
+  function queryTokens() {
+    return foldText(filterState.query).split(/\s+/).filter(Boolean);
+  }
+
+  function courseStatusMatches(c, status, overdueIds) {
+    if (status === 'all') return true;
+    var done = isCourseFullyCompleted(c);
+    if (status === 'done') return done;
+    if (status === 'notdone') return !done;
+    if (status === 'review') return isResearchCourse(c) && !!c.reviewStatus;
+    if (status === 'overdue') return !!(overdueIds && overdueIds[c.id]);
+    var today = getTodayStr();
+    var items = getCourseTaskItems(c).filter(function(it) { return !it.done; });
+    if (status === 'ongoing') {
+      return !done && items.some(function(it) { return it.start <= today && it.end >= today; });
+    }
+    if (status === 'upcoming') {
+      return !done && items.some(function(it) { return it.start > today; }) &&
+        !items.some(function(it) { return it.start <= today && it.end >= today; });
+    }
+    return true;
+  }
+
+  function matchesSearchFilters(c, overdueIds) {
+    var tokens = queryTokens();
+    if (tokens.length) {
+      var hay = courseSearchText(c);
+      for (var i = 0; i < tokens.length; i++) if (hay.indexOf(tokens[i]) === -1) return false;
+    }
+    if (filterState.location !== 'all' && courseLocations(c).indexOf(filterState.location) === -1) return false;
+    return courseStatusMatches(c, filterState.status, overdueIds);
+  }
+
+  function hasActiveFilters() {
+    return !!(filterState.query || filterState.status !== 'all' || filterState.location !== 'all' || selectedCategoryFilter !== 'all');
+  }
+
+  function updateLocationFilterOptions() {
+    var sel = document.getElementById('filterLocation');
+    if (!sel) return;
+    var seen = {};
+    courses.forEach(function(c) { courseLocations(c).forEach(function(l) { seen[l] = true; }); });
+    var names = Object.keys(seen).sort(function(a, b) { return a.localeCompare(b, 'vi'); });
+    if (filterState.location !== 'all' && !seen[filterState.location]) names.push(filterState.location);
+    var sig = names.join('\u0001');
+    if (sel.getAttribute('data-sig') !== sig) {
+      sel.innerHTML = '<option value="all">Địa điểm: tất cả</option>' + names.map(function(n) {
+        return '<option value="' + escapeHtml(n) + '">📍 ' + escapeHtml(n) + '</option>';
+      }).join('');
+      sel.setAttribute('data-sig', sig);
+    }
+    sel.value = filterState.location;
+  }
+
+  function onFilterChange() {
+    filterState.status = document.getElementById('filterStatus').value;
+    filterState.location = document.getElementById('filterLocation').value;
+    renderGantt();
+  }
+
+  function clearAllFilters() {
+    filterState = { query: '', status: 'all', location: 'all' };
+    selectedCategoryFilter = 'all';
+    var box = document.getElementById('globalSearch');
+    if (box) box.value = '';
+    document.getElementById('filterStatus').value = 'all';
+    hideSearchResults();
+    renderGantt();
+  }
+
+  function buildSearchHits(tokens) {
+    var hits = [];
+    function ok(text) {
+      var h = foldText(text);
+      for (var i = 0; i < tokens.length; i++) if (h.indexOf(tokens[i]) === -1) return false;
+      return true;
+    }
+    courses.forEach(function(c) {
+      var projText = [c.name, c.originalName, c.category, THEME_LABELS[getCourseTheme(c)], c.journalName, c.clientName, courseLocations(c).join(' ')].join(' ');
+      if (ok(projText)) {
+        var next = getCourseNextPendingItem(c);
+        hits.push({ type: 'project', courseId: c.id, courseName: c.name, label: 'Dự án', date: next ? next.date : '', theme: getCourseTheme(c) });
+      }
+      getCourseTaskItems(c).forEach(function(it) {
+        var text = [it.courseName, it.label, it.detail, it.note].join(' ');
+        if (ok(text) && !(ok(projText) && !ok([it.label, it.detail, it.note].join(' ')))) {
+          hits.push({ type: 'block', courseId: c.id, courseName: c.name, label: it.label, stage: it.stage, kind: it.kind, idx: it.idx,
+            date: it.start, end: it.end, done: it.done, theme: getCourseTheme(c) });
+        }
+      });
+    });
+    return hits;
+  }
+
+  function hideSearchResults() {
+    var box = document.getElementById('searchResults');
+    if (box) { box.style.display = 'none'; box.innerHTML = ''; }
+    searchActiveIdx = -1;
+  }
+
+  var searchHitsCache = [];
+
+  function onGlobalSearchInput() {
+    var input = document.getElementById('globalSearch');
+    if (!input) return;
+    filterState.query = input.value.trim();
+    var tokens = queryTokens();
+    var box = document.getElementById('searchResults');
+    if (!tokens.length) {
+      hideSearchResults();
+      renderGantt();
+      return;
+    }
+    searchHitsCache = buildSearchHits(tokens);
+    var html = '';
+    if (!searchHitsCache.length) {
+      html = '<div class="search-empty">Không tìm thấy kết quả cho “' + escapeHtml(filterState.query) + '”.</div>';
+    } else {
+      html = searchHitsCache.slice(0, 40).map(function(h, i) {
+        var tagBg = h.type === 'project' ? 'var(--cat-' + h.theme + '-bg)' : 'var(--bg-body)';
+        var tagFg = h.type === 'project' ? 'var(--cat-' + h.theme + '-text)' : 'var(--text-muted)';
+        var tag = h.type === 'project' ? 'DỰ ÁN' : (WORK_STAGE_LABELS[h.stage] || h.stage).toUpperCase();
+        return '<div class="search-hit" data-i="' + i + '"><span class="sh-tag" style="background:' + tagBg + '; color:' + tagFg + ';">' + escapeHtml(tag) + '</span>' +
+          '<span class="sh-main"><strong>' + escapeHtml(h.courseName) + '</strong>' + (h.type === 'block' ? ' — ' + escapeHtml(h.label) : '') + '</span>' +
+          '<span class="sh-date">' + (h.date ? formatVNDate(h.date).slice(0, 5) : '') + '</span></div>';
+      }).join('');
+      if (searchHitsCache.length > 40) html += '<div class="search-empty">…còn ' + (searchHitsCache.length - 40) + ' kết quả nữa — thu hẹp từ khóa để xem.</div>';
+    }
+    box.innerHTML = html;
+    box.style.display = 'block';
+    searchActiveIdx = -1;
+    renderGantt();
+  }
+
+  function goToSearchHit(h) {
+    hideSearchResults();
+    if (!h) return;
+    if (h.date) scrollToDate(h.date);
+    if (h.type === 'block') {
+      var block = describeBlock(findCourseById(h.courseId), h.kind, h.idx);
+      setTimeout(function() { focusBlock(block.id, true); }, 350);
+    } else {
+      var row = document.querySelector('#ganttSidebarList [data-course-id="' + h.courseId + '"]');
+      if (row && row.scrollIntoView) { try { row.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) { row.scrollIntoView(); } }
+      if (row) { row.classList.add('block-flash'); setTimeout(function() { row.classList.remove('block-flash'); }, 2600); }
+    }
+  }
+
+  function initSearchBox() {
+    var input = document.getElementById('globalSearch');
+    var box = document.getElementById('searchResults');
+    if (!input || !box) return;
+    box.addEventListener('mousedown', function(e) { e.preventDefault(); });
+    box.addEventListener('click', function(e) {
+      var el = e.target.closest('.search-hit');
+      if (!el) return;
+      goToSearchHit(searchHitsCache[parseInt(el.getAttribute('data-i'), 10)]);
+    });
+    input.addEventListener('keydown', function(e) {
+      var hits = box.querySelectorAll('.search-hit');
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        if (box.style.display !== 'none') { hideSearchResults(); } else { input.value = ''; onGlobalSearchInput(); input.blur(); }
+      } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        if (!hits.length) return;
+        e.preventDefault();
+        searchActiveIdx = (searchActiveIdx + (e.key === 'ArrowDown' ? 1 : -1) + hits.length) % hits.length;
+        hits.forEach(function(el, i) { el.classList.toggle('active', i === searchActiveIdx); });
+        if (hits[searchActiveIdx].scrollIntoView) hits[searchActiveIdx].scrollIntoView({ block: 'nearest' });
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        var idx = searchActiveIdx >= 0 ? searchActiveIdx : 0;
+        if (hits[idx]) goToSearchHit(searchHitsCache[parseInt(hits[idx].getAttribute('data-i'), 10)]);
+      }
+    });
+    input.addEventListener('blur', function() { setTimeout(hideSearchResults, 150); });
+    document.addEventListener('keydown', function(e) {
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'f') {
+        var modal = document.getElementById('editModal');
+        if (modal && modal.classList.contains('active')) return;
+        e.preventDefault();
+        input.focus();
+        input.select();
+      }
+    });
+  }
+
+  // =========================================================================
   // 7. ĐIỀU KHIỂN FORM THÊM MỚI
   // =========================================================================
   function handleCategoryModeChange() {
     var cat = document.getElementById('commonCategory').value;
-    var theme = getCategoryTheme(cat);
+    var theme = getCategoryTheme(cat, '');
     var isRes = (theme === 'nc');
     var isCons = (theme === 'tv');
     var isTeach = (!isRes && !isCons);
@@ -3174,14 +3596,19 @@
   }
 
   function getFilteredAndSortedCourses() {
+    var overdueIds = null;
+    if (filterState.status === 'overdue') {
+      overdueIds = {};
+      getOverdueBlocks().forEach(function(o) { overdueIds[o.courseId] = true; });
+    }
     var filtered = courses.filter(function(c) {
       if (selectedCategoryFilter !== 'all') {
-        if (getCategoryTheme(c.category) !== selectedCategoryFilter) return false;
+        if (getCourseTheme(c) !== selectedCategoryFilter) return false;
       }
       if (hideCompletedCourses && isCourseFullyCompleted(c)) {
         return false;
       }
-      return true;
+      return matchesSearchFilters(c, overdueIds);
     });
 
     if (currentSortOrder === 'date_asc' || currentSortOrder === 'date_desc') {
@@ -3434,13 +3861,13 @@
 
       var macro = getCourseMacroDates(c);
       if (macro && !c.macroDone && focusStr >= macro.start && focusStr <= macro.end) {
-        workItems.push({ stage: 'macro', courseName: c.name, detail: 'Chuẩn bị đề cương/học liệu toàn khóa' });
+        workItems.push({ stage: 'macro', courseId: c.id, kind: 'macro', idx: 0, courseName: c.name, detail: 'Chuẩn bị đề cương/học liệu toàn khóa' });
         prepCourseNames[c.id] = true;
       }
 
-      (c.sessions || []).forEach(function(s) {
+      (c.sessions || []).forEach(function(s, sIdxW) {
         if (!s.prepDone && s.prepStart && s.teachDate && focusStr >= s.prepStart && focusStr < s.teachDate) {
-          workItems.push({ stage: 'prep', courseName: c.name, detail: 'Soạn bài ' + s.title + ' (dạy ' + formatVNDate(s.teachDate).slice(0, 5) + ')' });
+          workItems.push({ stage: 'prep', courseId: c.id, kind: 'session_prep', idx: sIdxW, courseName: c.name, detail: 'Soạn bài ' + s.title + ' (dạy ' + formatVNDate(s.teachDate).slice(0, 5) + ')' });
           prepCourseNames[c.id] = true;
         }
       });
@@ -3453,6 +3880,9 @@
           var todaySession = c.sessions.filter(function(s) { return s.teachDate === focusStr; })[0];
           workItems.push({
             stage: 'teach',
+            courseId: c.id,
+            kind: todaySession ? 'session_teach' : 'project',
+            idx: todaySession ? c.sessions.indexOf(todaySession) : 0,
             courseName: c.name,
             teachToday: !!todaySession,
             sortTime: todaySession ? (todaySession.startTime || c.startTime || '') : '',
@@ -3470,6 +3900,9 @@
         gradingNow = true;
         workItems.push({
           stage: 'eval',
+          courseId: c.id,
+          kind: 'eval',
+          idx: st.idx,
           courseName: c.name,
           detail: (ev.name || 'Chấm thi') + ' (' + formatVNDate(ev.start).slice(0, 5) + ' → ' + formatVNDate(ev.end).slice(0, 5) + ')'
         });
@@ -3523,46 +3956,96 @@
   // Mỗi công việc một dòng đánh số; màu chữ theo công đoạn (xem .workload-list ở phần CSS)
   var WORK_STAGE_LABELS = { macro: 'Đề cương', prep: 'Soạn bài', teach: 'Giảng dạy', eval: 'Chấm thi', submit: 'Submit', deliv: 'Sản phẩm' };
 
-  function buildWorkListHtml(items, clickable) {
+  // Mỗi dòng mang data-course-id/kind/idx: nhấp = mở/tạo ghi chú Markdown, chuột phải = tùy chọn (initWorkListInteractions)
+  function buildWorkListHtml(items) {
     return '<ol class="workload-list">' + items.map(function(it) {
-      var onclick = (clickable && it.courseId) ? ' onclick="openModal(\'' + it.courseId + '\')" title="Nhấp để mở dự án"' : '';
-      return '<li class="wl-' + it.stage + (it.teachToday ? ' wl-teach-today' : '') + '"' + onclick + '>' +
+      var attrs = '';
+      var noteMark = '';
+      if (it.courseId) {
+        var blockId = it.courseId + '|' + (it.kind || 'project') + '|' + workBlockNum(it);
+        attrs = ' data-course-id="' + escapeHtml(it.courseId) + '" data-kind="' + escapeHtml(it.kind || 'project') + '" data-idx="' + (it.idx || 0) + '"' +
+          ' title="Nhấp: mở / tạo ghi chú Markdown · Chuột phải: thêm ghi chú hoặc chỉnh sửa dự án"';
+        if (noteLinks[blockId]) noteMark = '<span class="wl-note" title="Có ghi chú Markdown">📄</span>';
+      }
+      return '<li class="wl-' + it.stage + (it.teachToday ? ' wl-teach-today' : '') + '"' + attrs + '>' +
         '<span class="wl-stage">' + (WORK_STAGE_LABELS[it.stage] || it.stage) + '</span>' +
         '<strong>' + escapeHtml(it.courseName) + '</strong>' +
         (it.detail ? ' <span class="wl-detail">— ' + escapeHtml(it.detail) + '</span>' : '') +
-        (it.extraHtml || '') +
+        (it.extraHtml || '') + noteMark +
         '</li>';
     }).join('') + '</ol>';
+  }
+
+  // Số thứ tự trong mã khối (xem describeBlock): đọc từ dữ liệu hiện tại của dự án
+  function workBlockNum(it) {
+    var c = findCourseById(it.courseId);
+    return c ? describeBlock(c, it.kind || 'project', it.idx || 0).id.split('|').pop() : '0';
+  }
+
+  function initWorkListInteractions() {
+    ['congestionDetails', 'overdueAlertBox'].forEach(function(id) {
+      var box = document.getElementById(id);
+      if (!box) return;
+      function rowInfo(e) {
+        var li = e.target.closest('li[data-course-id]');
+        if (!li) return null;
+        var c = findCourseById(li.getAttribute('data-course-id'));
+        if (!c) return null;
+        return { course: c, kind: li.getAttribute('data-kind') || 'project', idx: parseInt(li.getAttribute('data-idx'), 10) || 0 };
+      }
+      box.addEventListener('click', function(e) {
+        var r = rowInfo(e);
+        if (!r) return;
+        openBlockNote(describeBlock(r.course, r.kind, r.idx));
+      });
+      box.addEventListener('contextmenu', function(e) {
+        var r = rowInfo(e);
+        if (!r) return;
+        var block = describeBlock(r.course, r.kind, r.idx);
+        var linked = !!noteLinks[block.id];
+        var items;
+        if (r.kind === 'project') {
+          items = [
+            { label: linked ? '📄 Mở ghi chú Markdown' : '📝 Thêm ghi chú Markdown', run: function() { openBlockNote(block); } },
+            { label: '✏️ Chỉnh sửa dự án…', run: function() { openModal(r.course.id); } }
+          ];
+        } else {
+          var done = getCourseTaskItems(r.course).some(function(it) { return it.kind === r.kind && it.idx === r.idx && it.done; });
+          items = buildBlockMenuItems(r.course.id, r.kind, r.idx, done);
+        }
+        showContextMenu(e, r.course.name, items);
+      });
+    });
   }
 
   // Các khối công việc đã qua ngày kết thúc mà chưa được đánh dấu hoàn thành
   function getOverdueBlocks() {
     var today = getTodayStr();
     var out = [];
-    function push(c, stage, label, endStr) {
+    function push(c, stage, label, endStr, kind, idx) {
       if (!endStr || String(endStr) >= today) return;
-      out.push({ courseId: c.id, courseName: c.name, stage: stage, detail: label, endDate: endStr, daysLate: diffDaysRaw(endStr, today) });
+      out.push({ courseId: c.id, courseName: c.name, stage: stage, kind: kind, idx: idx || 0, detail: label, endDate: endStr, daysLate: diffDaysRaw(endStr, today) });
     }
     courses.forEach(function(c) {
       if (isResearchCourse(c)) {
         if (c.reviewStatus) return;
         (c.submissions || []).forEach(function(sub, i) {
-          if (!sub.done) push(c, 'submit', sub.title || ('Submit lần ' + (i + 1)), sub.date);
+          if (!sub.done) push(c, 'submit', sub.title || ('Submit lần ' + (i + 1)), sub.date, 'research_submit', i);
         });
       } else if (isConsultingCourse(c)) {
         (c.deliverables || []).forEach(function(d, i) {
-          if (!d.done) push(c, 'deliv', d.title || ('Sản phẩm ' + (i + 1)), d.date);
+          if (!d.done) push(c, 'deliv', d.title || ('Sản phẩm ' + (i + 1)), d.date, 'consulting_deliverable', i);
         });
       } else {
         var macro = getCourseMacroDates(c);
-        if (macro && !c.macroDone) push(c, 'macro', 'Chuẩn bị đề cương', addDays(macro.end, -1));
-        (c.sessions || []).forEach(function(s) {
+        if (macro && !c.macroDone) push(c, 'macro', 'Chuẩn bị đề cương', addDays(macro.end, -1), 'macro', 0);
+        (c.sessions || []).forEach(function(s, si) {
           var title = s.title || ('Buổi ' + s.num);
-          if (diffDaysRaw(s.prepStart, s.teachDate) > 0 && !s.prepDone) push(c, 'prep', 'Soạn bài ' + title, addDays(s.teachDate, -1));
-          if (!s.teachDone) push(c, 'teach', 'Dạy ' + title, s.teachDate);
+          if (diffDaysRaw(s.prepStart, s.teachDate) > 0 && !s.prepDone) push(c, 'prep', 'Soạn bài ' + title, addDays(s.teachDate, -1), 'session_prep', si);
+          if (!s.teachDone) push(c, 'teach', 'Dạy ' + title, s.teachDate, 'session_teach', si);
         });
         getEvalStages(c).forEach(function(st) {
-          if (!st.ev.done) push(c, 'eval', st.ev.name || 'Chấm thi', st.ev.end);
+          if (!st.ev.done) push(c, 'eval', st.ev.name || 'Chấm thi', st.ev.end, 'eval', st.idx);
         });
       }
     });
@@ -3583,7 +4066,7 @@
       o.extraHtml = ' <span class="overdue-late">(quá ' + o.daysLate + ' ngày · hạn ' + formatVNDate(o.endDate).slice(0, 5) + ')</span>';
       return o;
     });
-    box.innerHTML = '<div class="overdue-title">⚠️ Quá ngày mà chưa hoàn thành (' + overdue.length + ')</div>' + buildWorkListHtml(items, true);
+    box.innerHTML = '<div class="overdue-title">⚠️ Quá ngày mà chưa hoàn thành (' + overdue.length + ')</div>' + buildWorkListHtml(items);
     box.style.display = 'block';
   }
 
@@ -4104,6 +4587,12 @@
     return '';
   }
 
+  // Event từ lịch FSB → FSB (xanh dương); từ lịch RMIT → RMIT (đỏ); còn lại (Outlook, Exchange, iCloud…) → Outlook (hồng nhạt)
+  function getCalendarSourceCategory(ev) {
+    var prefix = getCalendarAccountPrefix(ev);
+    return prefix || 'Outlook';
+  }
+
   function hasAccountPrefix(name, prefix) {
     return new RegExp('^' + prefix + '(\\b|\\s|$)', 'i').test(String(name || '').trim());
   }
@@ -4122,7 +4611,7 @@
       var gName = applyAccountPrefix(parsed.courseName, prefix);
       if (!groups[gName]) {
         groups[gName] = [];
-        groupMeta[gName] = { prefix: prefix, rawName: parsed.courseName };
+        groupMeta[gName] = { prefix: prefix, rawName: parsed.courseName, category: getCalendarSourceCategory(ev) };
       }
       groups[gName].push({
         teachDate: ev.teachDate,
@@ -4175,6 +4664,11 @@
           existing.name = applyAccountPrefix(existing.name, meta.prefix);
           changedCount++;
         }
+        // Dự án đang mang màu mặc định Outlook mà lịch nguồn là FSB / RMIT thì chuyển đúng loại
+        if (meta.prefix && existing.category === 'Outlook') {
+          existing.category = meta.category;
+          changedCount++;
+        }
 
         if (!isResearchCourse(existing) && !isConsultingCourse(existing)) {
           var existingByDate = {};
@@ -4222,7 +4716,7 @@
         }
         updatedCount++;
       } else {
-        createCourseFromSessions(cName, sList, hasEval, macroDays, sId, sKey);
+        createCourseFromSessions(cName, sList, hasEval, macroDays, sId, sKey, meta.category);
         addedCount++;
         changedCount++;
       }
@@ -4235,7 +4729,7 @@
     return { added: addedCount, updated: updatedCount, blocked: blockedCount, changed: changedCount };
   }
 
-  function createCourseFromSessions(courseName, rawSessions, hasEval, macroDays, forcedId, forcedSyncKey) {
+  function createCourseFromSessions(courseName, rawSessions, hasEval, macroDays, forcedId, forcedSyncKey, forcedCategory) {
     var cfg = getPrepDaysConfig();
     var commonLT = getCommonLocationAndTimeConfig();
     var lastDate = rawSessions[rawSessions.length - 1].teachDate;
@@ -4281,7 +4775,7 @@
       syncKey: sKey,
       originalName: courseName,
       name: courseName,
-      category: document.getElementById('commonCategory').value,
+      category: forcedCategory || canonicalCategory(document.getElementById('commonCategory').value, courseName),
       prepIntensity: document.getElementById('commonPrepIntensity').value,
       hasEvaluation: hasEval !== false,
       macroDays: macroDays,
@@ -4422,7 +4916,9 @@
 
   function renderGantt() {
     try {
+      scheduleWarnings = computeScheduleWarnings(getTodayStr(), 126);
       updateWorkloadAlertBox();
+      updateConflictAlertBox();
       updateSidebarCountdownSection();
       updateFilterToolbarUI();
 
@@ -4463,6 +4959,7 @@
       var currentMonthKey = "";
       var currentMonthSpan = 0;
       var monthCells = [];
+      var conflictKeys = {};
 
       for (var d = 0; d < totalDays; d++) {
         var curDate = new Date(startDate);
@@ -4490,6 +4987,8 @@
         // Kiểm tra xem ngày này có lớp trùng giờ hay không để hiện chấm đỏ cảnh báo trên đầu cột
         var dayCheck = inspectDaySchedule(curDateStr);
         var hasConflict = dayCheck.conflicts.length > 0;
+        Object.keys(dayCheck.conflictedKeys).forEach(function(k) { conflictKeys[k] = true; });
+        var weekWarn = scheduleWarnings.weekByMonday[curDateStr] || null;
 
         var dayCell = document.createElement('div');
         dayCell.className = 'day-header-cell' +
@@ -4497,14 +4996,17 @@
           (isToday ? ' today' : '') +
           (isEndOfMonth ? ' month-sep' : '') +
           (hasConflict ? ' has-time-conflict' : '') +
+          (weekWarn ? ' week-overload' : '') +
           (activeInspectedDate === curDateStr ? ' active-selected-day' : '') +
           (workloadFocusDate === curDateStr ? ' workload-focus-day' : '');
         dayCell.setAttribute('data-date', curDateStr);
         dayCell.style.width = dayWidth + 'px';
         dayCell.style.minWidth = dayWidth + 'px';
         dayCell.style.maxWidth = dayWidth + 'px';
-        dayCell.title = 'Click để xem số lớp dạy & chuẩn bị ngày ' + formatVNDate(curDateStr) + (hasConflict ? ' (⚠️ Có lớp trùng giờ!)' : '');
+        dayCell.title = 'Click để xem số lớp dạy & chuẩn bị ngày ' + formatVNDate(curDateStr) + (hasConflict ? ' (⚠️ Có lớp trùng giờ!)' : '') +
+          (weekWarn ? '\n📊 Tuần này quá tải: ' + describeWeekOverload(weekWarn) : '');
         dayCell.innerHTML =
+          (weekWarn ? '<span class="week-overload-dot">📊</span>' : '') +
           (hasConflict ? '<span class="conflict-dot" title="Cảnh báo có lớp trùng giờ!"></span>' : '') +
           '<span class="day-num">' + dt + '</span>' +
           '<span class="day-name">' + dayNameStr + '</span>';
@@ -4534,10 +5036,14 @@
       });
 
       // 2. Vẽ từng dòng dự án
+      var rowToneCount = {};
       sortedCourses.forEach(function(c, cIdx) {
         var isCompleted = isCourseFullyCompleted(c);
-        var stripeClass = isCompleted ? 'row-completed' : ((cIdx % 2 === 0) ? 'row-even' : 'row-odd');
-        var theme = getCategoryTheme(c.category);
+        var theme = getCourseTheme(c);
+        // Dòng mang màu của loại dự án (xám nếu đã hoàn thành); hai dòng liền loại thay phiên hai sắc độ cùng tông.
+        var toneKey = isCompleted ? 'done' : theme;
+        var toneIdx = (rowToneCount[toneKey] = (rowToneCount[toneKey] || 0) + 1) - 1;
+        var stripeClass = 'row-t-' + toneKey + ' row-v' + (toneIdx % 2);
         var catTagClass = 'cat-tag-' + theme;
         var isRes = isResearchCourse(c);
         var isCons = isConsultingCourse(c);
@@ -4707,7 +5213,7 @@
               if (prepDays > 0) {
                 drawDayBar(canvas, s.prepStart, addDays(s.teachDate, -1), startDate, 'bar-prep-' + theme, 'Prep B' + s.num, c.name + ' - ' + s.title, !!s.prepDone, sLane, s.note || '', sMeta, barHandler(c, 'session_prep', sIdx));
               }
-              drawDayBar(canvas, s.teachDate, s.teachDate, startDate, 'bar-teach-' + theme, 'B' + s.num, c.name + ' - ' + s.title, !!s.teachDone, sLane, s.note || '', sMeta, barHandler(c, 'session_teach', sIdx));
+              drawDayBar(canvas, s.teachDate, s.teachDate, startDate, 'bar-teach-' + theme, 'B' + s.num, c.name + ' - ' + s.title, !!s.teachDone, sLane, s.note || '', sMeta, barHandler(c, 'session_teach', sIdx), { conflict: !!conflictKeys[c.id + '_s_' + sIdx] });
             });
           }
 
@@ -4783,7 +5289,7 @@
               if (prepDays > 0) {
                 drawDayBar(sCanvas, s.prepStart, addDays(s.teachDate, -1), startDate, 'bar-prep-' + theme, 'Prep: ' + s.title, c.name, !!s.prepDone, 0, s.note || '', sMetaExp, barHandler(c, 'session_prep', sIdx));
               }
-              drawDayBar(sCanvas, s.teachDate, s.teachDate, startDate, 'bar-teach-' + theme, 'Dạy: ' + s.title, c.name, !!s.teachDone, 0, s.note || '', sMetaExp, barHandler(c, 'session_teach', sIdx));
+              drawDayBar(sCanvas, s.teachDate, s.teachDate, startDate, 'bar-teach-' + theme, 'Dạy: ' + s.title, c.name, !!s.teachDone, 0, s.note || '', sMetaExp, barHandler(c, 'session_teach', sIdx), { conflict: !!conflictKeys[c.id + '_s_' + sIdx] });
               childTime.appendChild(sCanvas);
               timelineList.appendChild(childTime);
             });
@@ -4919,6 +5425,13 @@
     fn.courseId = c.id;
     fn.kind = kind;
     fn.idx = idx;
+    // Khả năng kéo-thả: move = dời cả khối; resizeStart / resizeEnd = kéo mép trái / phải đổi độ dài
+    var caps = { move: false, resizeStart: false, resizeEnd: false };
+    if (kind === 'session_teach' || kind === 'research_submit' || kind === 'consulting_deliverable') caps.move = true;
+    else if (kind === 'session_prep') { caps.move = true; caps.resizeStart = true; }
+    else if (kind === 'macro') caps.resizeStart = true;
+    else if (kind === 'eval') { caps.move = true; caps.resizeStart = true; caps.resizeEnd = true; }
+    fn.dragCaps = caps;
     return fn;
   }
 
@@ -4951,7 +5464,7 @@
     }));
   }
 
-  function focusBlock(blockId) {
+  function focusBlock(blockId, noModal) {
     var el = null;
     var bars = document.querySelectorAll('.bar[data-block-id]');
     for (var i = 0; i < bars.length; i++) {
@@ -4959,6 +5472,7 @@
     }
     if (!el) {
       // Khối không hiện trên Gantt (ngoài khoảng ngày / đang bị lọc): mở cửa sổ dự án thay thế.
+      if (noModal) return;
       var courseId = String(blockId).split('|')[0];
       if (courses.some(function(c) { return c.id === courseId; })) openModal(courseId);
       return;
@@ -5005,6 +5519,140 @@
     return true;
   };
 
+  // ---- Kéo-thả khối trên thanh Gantt ----
+  var lastBarDragEnd = 0;
+  var activeBarDrag = null;
+
+  function attachBarDrag(bar, handler, caps) {
+    bar.addEventListener('pointerdown', function(e) {
+      if (e.button !== 0 || e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+      if (e.target && e.target.classList && e.target.classList.contains('note-link')) return;
+      var handle = e.target && e.target.getAttribute ? e.target.getAttribute('data-handle') : null;
+      var mode = handle === 'l' ? 'resizeStart' : (handle === 'r' ? 'resizeEnd' : (caps.move ? 'move' : null));
+      if (!mode) return;
+      activeBarDrag = {
+        bar: bar, handler: handler, mode: mode, pointerId: e.pointerId, x0: e.clientX, delta: 0, moved: false,
+        left0: parseFloat(bar.style.left) || 0, width0: parseFloat(bar.style.width) || 0
+      };
+      try { bar.setPointerCapture(e.pointerId); } catch (err) {}
+    });
+    bar.addEventListener('pointermove', function(e) {
+      var d = activeBarDrag;
+      if (!d || d.bar !== bar || e.pointerId !== d.pointerId) return;
+      var dx = e.clientX - d.x0;
+      if (!d.moved) {
+        if (Math.abs(dx) < 4) return;
+        d.moved = true;
+        bar.classList.add('dragging');
+        document.body.classList.add('is-dragging-bar');
+        document.getElementById('tooltip').style.display = 'none';
+      }
+      var delta = Math.round(dx / dayWidth);
+      if (d.mode === 'resizeStart') delta = Math.min(delta, Math.round((d.width0 + 2) / dayWidth) - 1);
+      if (d.mode === 'resizeEnd') delta = Math.max(delta, 1 - Math.round((d.width0 + 2) / dayWidth));
+      d.delta = delta;
+      if (d.mode === 'move') {
+        bar.style.left = (d.left0 + delta * dayWidth) + 'px';
+      } else if (d.mode === 'resizeStart') {
+        bar.style.left = (d.left0 + delta * dayWidth) + 'px';
+        bar.style.width = Math.max(22, d.width0 - delta * dayWidth) + 'px';
+      } else {
+        bar.style.width = Math.max(22, d.width0 + delta * dayWidth) + 'px';
+      }
+      showDragHint(e, d);
+    });
+    function finish(e, commit) {
+      var d = activeBarDrag;
+      if (!d || d.bar !== bar) return;
+      activeBarDrag = null;
+      try { bar.releasePointerCapture(d.pointerId); } catch (err) {}
+      document.body.classList.remove('is-dragging-bar');
+      bar.classList.remove('dragging');
+      document.getElementById('tooltip').style.display = 'none';
+      if (!d.moved) return;
+      lastBarDragEnd = Date.now();
+      if (commit && d.delta !== 0) {
+        applyBarDrag(d.handler.courseId, d.handler.kind, d.handler.idx, d.mode, d.delta);
+      } else {
+        renderGantt();
+      }
+    }
+    bar.addEventListener('pointerup', function(e) { finish(e, true); });
+    bar.addEventListener('pointercancel', function(e) { finish(e, false); });
+  }
+
+  function showDragHint(e, d) {
+    var tooltip = document.getElementById('tooltip');
+    var sign = d.delta > 0 ? '+' : '';
+    var what = d.mode === 'move' ? 'Dời' : 'Đổi độ dài';
+    tooltip.innerHTML = '<strong>' + what + ': ' + sign + d.delta + ' ngày</strong><br><span style="opacity:.8;">Thả để áp dụng · Esc để hủy</span>';
+    tooltip.style.display = 'block';
+    tooltip.style.left = Math.min(window.innerWidth - 360, e.pageX + 12) + 'px';
+    tooltip.style.top = (e.pageY + 18) + 'px';
+  }
+
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && activeBarDrag) {
+      var d = activeBarDrag;
+      activeBarDrag = null;
+      document.body.classList.remove('is-dragging-bar');
+      d.bar.classList.remove('dragging');
+      document.getElementById('tooltip').style.display = 'none';
+      lastBarDragEnd = Date.now();
+      renderGantt();
+    }
+  });
+
+  // Áp dụng kết quả kéo-thả vào dữ liệu: delta = số ngày (âm = sớm hơn)
+  function applyBarDrag(courseId, kind, idx, mode, delta) {
+    var c = findCourseById(courseId);
+    if (!c || !delta) return false;
+    var msg = '';
+    if (kind === 'session_teach' || (kind === 'session_prep' && mode === 'move')) {
+      var s = (c.sessions || [])[idx];
+      if (!s) return false;
+      s.teachDate = addDays(s.teachDate, delta);
+      s.prepStart = addDays(s.prepStart, delta); // giữ nguyên độ dài chuẩn bị
+      c.sessions.sort(function(a, b) { return String(a.teachDate).localeCompare(String(b.teachDate)); });
+      msg = 'Đã dời buổi sang ' + formatVNDate(s.teachDate);
+    } else if (kind === 'session_prep' && mode === 'resizeStart') {
+      var sp = (c.sessions || [])[idx];
+      if (!sp) return false;
+      var newStart = addDays(sp.prepStart, delta);
+      var latest = addDays(sp.teachDate, -1);
+      sp.prepStart = newStart > latest ? latest : newStart;
+      msg = 'Chuẩn bị bắt đầu từ ' + formatVNDate(sp.prepStart) + ' (' + diffDaysRaw(sp.prepStart, sp.teachDate) + ' ngày)';
+    } else if (kind === 'macro' && mode === 'resizeStart') {
+      var md = Math.max(1, Math.min(120, (parseInt(c.macroDays, 10) || 0) - delta));
+      c.macroDays = md;
+      msg = 'Đề cương: ' + md + ' ngày';
+    } else if (kind === 'eval') {
+      var ev = getEvalStageByIndex(c, idx);
+      if (!ev) return false;
+      if (mode === 'move') { ev.start = addDays(ev.start, delta); ev.end = addDays(ev.end, delta); }
+      else if (mode === 'resizeStart') { var ns = addDays(ev.start, delta); ev.start = ns > ev.end ? ev.end : ns; }
+      else { var ne = addDays(ev.end, delta); ev.end = ne < ev.start ? ev.start : ne; }
+      msg = (ev.name || 'Chấm thi') + ': ' + formatVNDate(ev.start).slice(0, 5) + ' → ' + formatVNDate(ev.end).slice(0, 5);
+    } else if (kind === 'research_submit') {
+      var sub = (c.submissions || [])[idx];
+      if (!sub) return false;
+      sub.date = addDays(sub.date, delta);
+      msg = 'Đã dời ' + (sub.title || 'Submit') + ' sang ' + formatVNDate(sub.date);
+    } else if (kind === 'consulting_deliverable') {
+      var dl = (c.deliverables || [])[idx];
+      if (!dl) return false;
+      dl.date = addDays(dl.date, delta);
+      msg = 'Đã dời ' + (dl.title || 'Sản phẩm') + ' sang ' + formatVNDate(dl.date);
+    } else {
+      return false;
+    }
+    saveData();
+    renderGantt();
+    if (activeCourseId === courseId) populateModalBodyForCourse(c);
+    showToast('↔️ ' + msg + ' · ⌘Z để hoàn tác');
+    return true;
+  }
+
   function drawDayBar(canvas, startStr, endStr, originDate, cssClass, labelText, courseTitle, isDone, laneIndex, noteText, sessionMeta, onClickHandler, opts) {
     if (!startStr || !endStr) return;
     var p1 = String(startStr).split('-');
@@ -5032,7 +5680,11 @@
     var lateDays = isOverdue ? diffDaysRaw(endStr, todayForBar) : 0;
 
     var bar = document.createElement('div');
-    bar.className = 'bar ' + cssClass + (isDone ? ' is-done' : '') + (isOverdue ? ' is-overdue' : '');
+    var dragCaps = (typeof onClickHandler === 'function' && onClickHandler.dragCaps) ? onClickHandler.dragCaps : null;
+    var canDrag = !!(dragCaps && (dragCaps.move || dragCaps.resizeStart || dragCaps.resizeEnd));
+    var hasConflict = !!(opts && opts.conflict);
+    bar.className = 'bar ' + cssClass + (isDone ? ' is-done' : '') + (isOverdue ? ' is-overdue' : '') +
+      (hasConflict ? ' bar-conflict' : '') + (canDrag ? ' can-drag' : '');
     bar.style.left = (visibleStart * dayWidth) + 'px';
     bar.style.width = Math.max(22, visibleDays * dayWidth - 2) + 'px';
     bar.style.top = topPx + 'px';
@@ -5042,6 +5694,9 @@
       innerHtml += '<span class="done-badge">✓</span>';
     } else if (isOverdue) {
       innerHtml += '<span class="overdue-badge" title="Quá hạn ' + lateDays + ' ngày, chưa hoàn thành">!</span>';
+    }
+    if (hasConflict) {
+      innerHtml += '<span class="conflict-badge" title="Trùng giờ giảng với lớp khác">⚠️</span>';
     }
     if (cleanNote) {
       innerHtml += '<span class="note-dot">📝</span>';
@@ -5053,11 +5708,17 @@
       bar.setAttribute('data-block-id', block.id);
       if (noteLink) innerHtml += '<span class="note-link" title="Mở ghi chú Markdown">📄</span>';
     }
+    if (canDrag && dragCaps.resizeStart && startOffset >= 0) innerHtml = '<span class="bar-handle bar-handle-l" data-handle="l" title="Kéo để đổi độ dài"></span>' + innerHtml;
+    if (canDrag && dragCaps.resizeEnd && endOffset < totalDaysRange) innerHtml += '<span class="bar-handle bar-handle-r" data-handle="r" title="Kéo để đổi độ dài"></span>';
     bar.innerHTML = innerHtml;
+
+    if (canDrag) attachBarDrag(bar, onClickHandler, dragCaps);
 
     if (typeof onClickHandler === 'function') {
       bar.addEventListener('click', function(e) {
         e.stopPropagation();
+        if (Date.now() - lastBarDragEnd < 150) return; // vừa kéo-thả xong: không tính là nhấp
+        document.getElementById('tooltip').style.display = 'none';
         // ⌘-nhấp (hoặc Ctrl-nhấp) hoặc nhấp biểu tượng 📄: mở / tạo ghi chú thay vì đổi trạng thái hoàn thành.
         if (block && (e.metaKey || e.ctrlKey || (e.target && e.target.classList && e.target.classList.contains('note-link')))) {
           openBlockNote(block);
@@ -5099,6 +5760,8 @@
         '📅 ' + startStr + (startStr !== endStr ? (' &rarr; ' + endStr + ' (' + totalDuration + ' ngày)') : '') + '<br>' +
         metaPopupHtml +
         statusText +
+        (hasConflict ? '<div style="margin-top:4px; color:#fca5a5; font-weight:700;">⚠️ Trùng giờ giảng với lớp khác trong ngày</div>' : '') +
+        (canDrag ? '<div style="margin-top:4px; opacity:.85;">↔️ Kéo để ' + (dragCaps.move ? 'dời' : 'đổi độ dài') + (dragCaps.move && (dragCaps.resizeStart || dragCaps.resizeEnd) ? ' · kéo mép để đổi độ dài' : '') + ' (⌘Z để hoàn tác)</div>' : '') +
         notePopupHtml +
         (block ? '<div style="margin-top:6px; opacity:.85;">' + (noteLink ? '📄 Có ghi chú Markdown' : '📄 Chưa có ghi chú Markdown') + ' — <strong>⌘-nhấp</strong> để ' + (noteLink ? 'mở' : 'tạo') + '</div>' : '');
       tooltip.style.display = 'block';
@@ -5128,7 +5791,7 @@
     document.getElementById('modalCourseTitle').textContent = 'Chỉnh sửa: ' + c.name;
     document.getElementById('modalSyncIdBadge').textContent = '🔒 ID cố định: ' + c.id + (c.originalName ? (' • Gốc: ' + c.originalName) : '');
     document.getElementById('editCourseName').value = c.name;
-    document.getElementById('editCourseCategory').value = c.category || "Giảng dạy MBA";
+    document.getElementById('editCourseCategory').value = canonicalCategory(c.category, c.name);
 
     populateModalBodyForCourse(c);
     document.getElementById('editModal').className = 'modal-backdrop active';
@@ -5656,14 +6319,119 @@
     activeCourseId = null;
   }
 
+  // ---- Hoàn tác / làm lại (⌘Z / ⇧⌘Z): chụp trạng thái dự án trước mỗi lần lưu ----
+  var UNDO_LIMIT = 100;
+  var undoStack = [];
+  var redoStack = [];
+  var lastSnapshot = null;
+  var lastUndoPushAt = 0;
+  var lastUndoTyping = false;
+  var undoSuspended = false;   // đang tự cập nhật từ Calendar: không đưa vào lịch sử hoàn tác
+  var undoRestoring = false;
+  var toastTimer = null;
+
+  function snapshotState() {
+    return JSON.stringify({ courses: courses, deletedRegistry: deletedRegistry });
+  }
+
+  function showToast(text) {
+    var el = document.getElementById('appToast');
+    if (!el) return;
+    el.textContent = text;
+    el.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function() { el.classList.remove('show'); }, 2200);
+  }
+
+  function isTextEditing(el) {
+    if (!el || !el.tagName) return false;
+    if (el.isContentEditable) return true;
+    var tag = el.tagName.toUpperCase();
+    if (tag === 'TEXTAREA') return true;
+    if (tag === 'INPUT') {
+      var t = String(el.type || 'text').toLowerCase();
+      return ['checkbox', 'radio', 'button', 'range', 'color', 'file', 'submit'].indexOf(t) === -1;
+    }
+    return false;
+  }
+
+  function trackUndo() {
+    if (undoRestoring) return;
+    var snap = snapshotState();
+    if (lastSnapshot === null) { lastSnapshot = snap; return; }
+    if (snap === lastSnapshot) return;
+    if (undoSuspended) { lastSnapshot = snap; return; }
+    var modal = document.getElementById('editModal');
+    var typing = !!(modal && modal.classList.contains('active') && isTextEditing(document.activeElement));
+    var now = Date.now();
+    // Gõ liên tục trong cửa sổ chỉnh sửa chỉ tính là một bước hoàn tác
+    if (!(typing && lastUndoTyping && now - lastUndoPushAt < 1500)) {
+      undoStack.push(lastSnapshot);
+      if (undoStack.length > UNDO_LIMIT) undoStack.shift();
+    }
+    lastUndoPushAt = now;
+    lastUndoTyping = typing;
+    redoStack = [];
+    lastSnapshot = snap;
+  }
+
+  function restoreSnapshot(snap) {
+    var obj = JSON.parse(snap);
+    undoRestoring = true;
+    try {
+      courses = Array.isArray(obj.courses) ? obj.courses : [];
+      deletedRegistry = Array.isArray(obj.deletedRegistry) ? obj.deletedRegistry : [];
+      saveDeletedRegistry();
+      writeStored('academic_smart_gantt', JSON.stringify(courses));
+    } finally {
+      undoRestoring = false;
+    }
+    lastSnapshot = snap;
+    lastUndoTyping = false;
+    if (activeCourseId) {
+      var cur = findCourseById(activeCourseId);
+      if (cur) populateModalBodyForCourse(cur); else closeModal();
+    }
+    renderGantt();
+  }
+
+  function doUndo() {
+    if (!undoStack.length) { showToast('Không còn thao tác nào để hoàn tác'); return true; }
+    redoStack.push(snapshotState());
+    restoreSnapshot(undoStack.pop());
+    showToast('↩️ Đã hoàn tác (⇧⌘Z để làm lại)');
+    return true;
+  }
+
+  function doRedo() {
+    if (!redoStack.length) { showToast('Không còn thao tác nào để làm lại'); return true; }
+    undoStack.push(snapshotState());
+    restoreSnapshot(redoStack.pop());
+    showToast('↪️ Đã làm lại');
+    return true;
+  }
+
+  // Native (menu Sửa → Hoàn tác / Làm lại) gọi các hàm này; trả về false nếu đang gõ chữ để dùng hoàn tác của ô nhập.
+  window.ganttUndo = function(fromMenu) {
+    if (fromMenu && isTextEditing(document.activeElement)) return false;
+    return doUndo();
+  };
+  window.ganttRedo = function(fromMenu) {
+    if (fromMenu && isTextEditing(document.activeElement)) return false;
+    return doRedo();
+  };
+
   function saveData() {
     writeStored('academic_smart_gantt', JSON.stringify(courses));
+    trackUndo();
   }
 
   function exportData() {
     var payload = {
       courses: courses,
-      deletedRegistry: deletedRegistry
+      deletedRegistry: deletedRegistry,
+      // Liên kết khối Gantt ↔ ghi chú Markdown: { "<mã dự án>|<loại>|<số>": { path: "/đường/dẫn/note.md" } }
+      noteLinks: noteLinks
     };
     var json = JSON.stringify(payload, null, 2);
     var fileName = "academic_smart_gantt_" + getTodayStr() + ".json";
@@ -5715,10 +6483,20 @@
   // Nhận dạng các định dạng tệp có thể nạp:
   //  1) [ ...dự án ]                       2) { courses: [...], deletedRegistry: [...] } (tệp "Xuất JSON")
   //  3) storage.json / bản sao lưu của ứng dụng: { academic_smart_gantt: "<chuỗi JSON>", ... }
+  function cleanNoteLinks(obj) {
+    var out = {};
+    if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return null;
+    Object.keys(obj).forEach(function(k) {
+      var v = obj[k];
+      if (v && typeof v === 'object' && typeof v.path === 'string' && v.path) out[k] = { path: v.path };
+    });
+    return out;
+  }
+
   function extractImportedProjects(parsed) {
-    if (Array.isArray(parsed)) return { list: parsed, deleted: null };
+    if (Array.isArray(parsed)) return { list: parsed, deleted: null, notes: null };
     if (parsed && Array.isArray(parsed.courses)) {
-      return { list: parsed.courses, deleted: Array.isArray(parsed.deletedRegistry) ? parsed.deletedRegistry : null };
+      return { list: parsed.courses, deleted: Array.isArray(parsed.deletedRegistry) ? parsed.deletedRegistry : null, notes: cleanNoteLinks(parsed.noteLinks) };
     }
     if (parsed && typeof parsed.academic_smart_gantt === 'string') {
       var inner = JSON.parse(parsed.academic_smart_gantt);
@@ -5731,7 +6509,11 @@
             if (Array.isArray(d)) del = d;
           } catch (e) {}
         }
-        return { list: innerList, deleted: del };
+        var notes = null;
+        if (typeof parsed.academic_smart_gantt_notes === 'string') {
+          try { notes = cleanNoteLinks(JSON.parse(parsed.academic_smart_gantt_notes)); } catch (e) {}
+        }
+        return { list: innerList, deleted: del, notes: notes };
       }
     }
     return null;
@@ -5773,9 +6555,15 @@
       deletedRegistry = found.deleted;
       saveDeletedRegistry();
     }
+    var noteCount = 0;
+    if (found.notes) {
+      noteCount = Object.keys(found.notes).length;
+      Object.keys(found.notes).forEach(function(k) { noteLinks[k] = found.notes[k]; });
+      saveNoteLinks();
+    }
     saveData();
     renderGantt();
-    alert('Đã nạp ' + courses.length + ' dự án từ tệp JSON.');
+    alert('Đã nạp ' + courses.length + ' dự án từ tệp JSON.' + (noteCount ? '\nĐã nạp ' + noteCount + ' liên kết ghi chú Markdown.' : ''));
   }
 
   // Dữ liệu đã lưu không đọc được: cất bản gốc sang khóa riêng (không bị lần lưu sau ghi đè) rồi báo người dùng.
@@ -5818,19 +6606,33 @@
     return document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
   }
 
+  // Ba chế độ: Tự động (theo macOS, đổi ngay khi hệ thống đổi) → Sáng / Tối cố định.
+  function themeMode() {
+    return getSavedTheme() || 'auto';
+  }
+
+  function updateThemeButton() {
+    var btn = document.getElementById('btnTheme');
+    if (!btn) return;
+    var mode = themeMode();
+    btn.textContent = mode === 'auto' ? '🌗 Tự động' : (mode === 'dark' ? '🌙 Tối' : '☀️ Sáng');
+    btn.title = 'Giao diện: ' + (mode === 'auto' ? 'tự động theo macOS' : (mode === 'dark' ? 'Tối' : 'Sáng')) + ' — bấm để đổi (Tự động → Sáng/Tối → Tự động)';
+  }
+
   function applyTheme(theme) {
     document.documentElement.setAttribute('data-theme', theme);
-    var btn = document.getElementById('btnTheme');
-    if (btn) {
-      btn.textContent = theme === 'dark' ? '☀️ Sáng' : '🌙 Tối';
-      btn.title = theme === 'dark' ? 'Chuyển sang giao diện Sáng' : 'Chuyển sang giao diện Tối';
-    }
+    updateThemeButton();
   }
 
   function toggleTheme() {
-    var next = currentTheme() === 'dark' ? 'light' : 'dark';
+    var mode = themeMode();
+    var sys = systemTheme();
+    var next;
+    if (mode === 'auto') next = sys === 'dark' ? 'light' : 'dark';
+    else if (mode !== sys) next = sys;
+    else next = 'auto';
     writeStored(THEME_KEY, next);
-    applyTheme(next);
+    applyTheme(next === 'auto' ? sys : next);
   }
 
   function initTheme() {
@@ -5881,10 +6683,10 @@
   // Tất cả khối công việc của một dự án; kind/idx khớp với toggleBarComplete / describeBlock.
   function getCourseTaskItems(c) {
     var items = [];
-    function add(kind, idx, stage, label, start, end, done, detail) {
+    function add(kind, idx, stage, label, start, end, done, detail, note) {
       if (!start || !end) return;
       items.push({ courseId: c.id, courseName: c.name, kind: kind, idx: idx, stage: stage, label: label,
-        start: start, end: end, done: !!done, detail: detail || '' });
+        start: start, end: end, done: !!done, detail: detail || '', note: note || '' });
     }
     if (isResearchCourse(c)) {
       (c.submissions || []).forEach(function(sub, i) {
@@ -5905,7 +6707,7 @@
         }
         var loc = getDisplayLocation(s.locationType || c.locationType, s.locationCustom !== undefined ? s.locationCustom : c.locationCustom);
         add('session_teach', i, 'teach', title, s.teachDate, s.teachDate, s.teachDone,
-          formatTimeRange(s.startTime || c.startTime, s.durationHours || c.durationHours) + ' · ' + loc);
+          formatTimeRange(s.startTime || c.startTime, s.durationHours || c.durationHours) + ' · ' + loc, s.note);
       });
       getEvalStages(c).forEach(function(st) {
         add('eval', st.idx, 'eval', st.ev.name || 'Chấm thi', st.ev.start, st.ev.end, st.ev.done, st.ev.note);
@@ -6276,6 +7078,7 @@
     if (!hasNativeCalendar() || !isMacAutoEnabled() || macAutoBusy) return;
     var modal = document.getElementById('editModal');
     if (modal && modal.classList.contains('active')) return; // đang sửa dự án: không đổi dữ liệu bên dưới
+    if (activeBarDrag) return; // đang kéo-thả một khối
     var ids = getSavedMacCalendarIds();
     if (!ids || !ids.length) return;
     if (!force && Date.now() - macAutoLastRun < MAC_AUTO_MIN_GAP_MS) return;
@@ -6288,7 +7091,12 @@
         var macroEl = document.getElementById('commonMacroDaysRange');
         var macroDays = macroEl ? parseInt(macroEl.value, 10) : 7;
         if (isNaN(macroDays)) macroDays = 7;
-        changed = groupAndCreateCourses(rawEvents, hasEvalEl ? hasEvalEl.checked : true, macroDays, true, true).changed;
+        undoSuspended = true;
+        try {
+          changed = groupAndCreateCourses(rawEvents, hasEvalEl ? hasEvalEl.checked : true, macroDays, true, true).changed;
+        } finally {
+          undoSuspended = false;
+        }
       }
       macAutoLastRun = Date.now();
       var now = new Date();
@@ -6314,6 +7122,116 @@
     });
   }
 
+  // =========================================================================
+  // 21. ĐỒNG BỘ TỪ WIDGET IPHONE (ĐÁNH DẤU HOÀN THÀNH)
+  // =========================================================================
+  // Widget (Scriptable) ghi gantt_actions.json trong iCloud Drive; ứng dụng đọc, áp dụng rồi ghi gantt_actions_ack.json.
+  // Mỗi thao tác: { id, courseId, kind, idx, guard, done, at } — guard là ngày của khối (để nhận đúng khối nếu thứ tự đã đổi).
+  var WIDGET_APPLIED_KEY = 'academic_smart_gantt_widget_applied';
+  var WIDGET_POLL_MS = 15 * 1000;
+  var widgetPolling = false;
+  var widgetAckWritten = false;
+
+  function hasWidgetBridge() {
+    return !!(window.GanttNative && typeof window.GanttNative.readWidgetActions === 'function');
+  }
+
+  function findSessionForAction(c, a) {
+    var list = c.sessions || [];
+    var s = list[a.idx];
+    if (a.guard && (!s || s.teachDate !== a.guard)) {
+      s = list.filter(function(x) { return x.teachDate === a.guard; })[0] || null;
+    }
+    return s || null;
+  }
+
+  // Trả về true nếu tìm thấy khối (đã đặt đúng trạng thái), false nếu khối không còn tồn tại
+  function applyWidgetAction(a) {
+    var c = findCourseById(a.courseId);
+    if (!c) return false;
+    var done = a.done !== false;
+    if (a.kind === 'session_teach' || a.kind === 'session_prep') {
+      var s = findSessionForAction(c, a);
+      if (!s) return false;
+      if (a.kind === 'session_teach') s.teachDone = done; else s.prepDone = done;
+      return true;
+    }
+    if (a.kind === 'macro') { c.macroDone = done; return true; }
+    if (a.kind === 'eval') {
+      var ev = getEvalStageByIndex(c, a.idx);
+      if (a.guard && (!ev || ev.start !== a.guard)) {
+        ev = getEvalStages(c).map(function(st) { return st.ev; }).filter(function(x) { return x.start === a.guard; })[0] || null;
+      }
+      if (!ev) return false;
+      ev.done = done;
+      return true;
+    }
+    if (a.kind === 'research_submit') { var sub = (c.submissions || [])[a.idx]; if (!sub) return false; sub.done = done; return true; }
+    if (a.kind === 'consulting_deliverable') { var dl = (c.deliverables || [])[a.idx]; if (!dl) return false; dl.done = done; return true; }
+    return false;
+  }
+
+  async function pollWidgetActions() {
+    if (!hasWidgetBridge() || widgetPolling) return 0;
+    var modal = document.getElementById('editModal');
+    if (modal && modal.classList.contains('active')) return 0; // đang sửa dự án: để lần sau
+    if (activeBarDrag) return 0;
+    widgetPolling = true;
+    var count = 0;
+    try {
+      var text = await window.GanttNative.readWidgetActions();
+      if (!text) return 0;
+      var list;
+      try { list = JSON.parse(text); } catch (e) { return 0; }
+      if (list && !Array.isArray(list) && Array.isArray(list.actions)) list = list.actions;
+      if (!Array.isArray(list) || !list.length) return 0;
+      var applied = [];
+      try { applied = JSON.parse(readStored(WIDGET_APPLIED_KEY) || '[]'); } catch (e) { applied = []; }
+      if (!Array.isArray(applied)) applied = [];
+      var seen = {};
+      applied.forEach(function(id) { seen[id] = true; });
+      var fresh = list.filter(function(a) { return a && a.id && a.courseId && !seen[a.id]; });
+      fresh.sort(function(x, y) { return String(x.at || '').localeCompare(String(y.at || '')); });
+      if (fresh.length) {
+        undoSuspended = true;
+        try {
+          fresh.forEach(function(a) {
+            if (applyWidgetAction(a)) count++;
+            applied.push(a.id);
+          });
+        } finally {
+          undoSuspended = false;
+        }
+        if (applied.length > 500) applied = applied.slice(applied.length - 500);
+        writeStored(WIDGET_APPLIED_KEY, JSON.stringify(applied));
+        if (count) {
+          saveData();
+          renderGantt();
+          showToast('📱 Widget iPhone: đã đồng bộ ' + count + ' việc hoàn thành');
+        }
+      }
+      if (fresh.length || !widgetAckWritten) {
+        widgetAckWritten = true;
+        await window.GanttNative.writeWidgetAck(JSON.stringify({ ids: applied, at: new Date().toISOString() }));
+      }
+    } catch (e) {
+      /* thiếu quyền / iCloud chưa tải xong: thử lại ở lần sau */
+    } finally {
+      widgetPolling = false;
+    }
+    return count;
+  }
+
+  function initWidgetSync() {
+    if (!hasWidgetBridge()) return;
+    setTimeout(pollWidgetActions, 2000);
+    setInterval(pollWidgetActions, WIDGET_POLL_MS);
+    window.addEventListener('focus', pollWidgetActions);
+    document.addEventListener('visibilitychange', function() {
+      if (document.visibilityState === 'visible') pollWidgetActions();
+    });
+  }
+
   // Nhấn Esc để đóng cửa sổ chỉnh sửa dự án
   document.addEventListener('keydown', function(e) {
     if (e.key !== 'Escape' || e.isComposing) return;
@@ -6325,19 +7243,36 @@
     }
   });
 
+  // Phím tắt: ⌘Z hoàn tác, ⇧⌘Z (hoặc Ctrl+Y) làm lại — để nguyên hoàn tác của ô nhập khi đang gõ chữ
+  document.addEventListener('keydown', function(e) {
+    if (!(e.metaKey || e.ctrlKey) || e.altKey) return;
+    var k = String(e.key || '').toLowerCase();
+    var wantUndo = k === 'z' && !e.shiftKey;
+    var wantRedo = (k === 'z' && e.shiftKey) || (k === 'y' && e.ctrlKey && !e.metaKey);
+    if (!wantUndo && !wantRedo) return;
+    if (isTextEditing(e.target)) return;
+    e.preventDefault();
+    if (wantUndo) doUndo(); else doRedo();
+  });
+
   // Khởi chạy an toàn
+  lastSnapshot = snapshotState();
   initTheme();
   initSaveStatus();
   initNativeFilePickers();
   initMacSyncPanel();
   initPeriodPanel();
   initContextMenus();
+  initWorkListInteractions();
+  initConflictBox();
+  initSearchBox();
   renderCreationSubmissionsList();
   renderCreationDeliverablesList();
   renderGantt();
   setTimeout(scrollToToday, 120);
   handleBootFailure();
   initMacAutoSync();
+  initWidgetSync();
 </script>
 </body>
 </html>

@@ -240,9 +240,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         addSubmenu(fileMenu, title: "Tệp", to: mainMenu)
 
         let editMenu = NSMenu(title: "Sửa")
-        editMenu.addItem(withTitle: "Hoàn tác", action: Selector(("undo:")), keyEquivalent: "z")
-        let redo = editMenu.addItem(withTitle: "Làm lại", action: Selector(("redo:")), keyEquivalent: "z")
+        // ⌘Z / ⇧⌘Z: hoàn tác thao tác trên Gantt (trang tự trả "chưa xử lý" khi đang gõ chữ → dùng hoàn tác của ô nhập)
+        editMenu.addItem(menuItem("Hoàn tác", #selector(ganttUndo(_:)), "z"))
+        let redo = menuItem("Làm lại", #selector(ganttRedo(_:)), "z")
         redo.keyEquivalentModifierMask = [.command, .shift]
+        editMenu.addItem(redo)
         editMenu.addItem(.separator())
         editMenu.addItem(withTitle: "Cắt", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
         editMenu.addItem(withTitle: "Sao chép", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
@@ -280,6 +282,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let item = NSMenuItem(title: title, action: action, keyEquivalent: key)
         item.target = self
         return item
+    }
+
+    @objc func ganttUndo(_ sender: Any?) { runPageHistory(redo: false) }
+    @objc func ganttRedo(_ sender: Any?) { runPageHistory(redo: true) }
+
+    private func runPageHistory(redo: Bool) {
+        guard let webView = webView else { return }
+        let name = redo ? "ganttRedo" : "ganttUndo"
+        let script = "(function(){return window.\(name) ? window.\(name)(true) : false;})()"
+        webView.evaluateJavaScript(script) { result, _ in
+            if let handled = result as? Bool, handled { return }
+            NSApp.sendAction(Selector((redo ? "redo:" : "undo:")), to: nil, from: nil)
+        }
     }
 
     @objc private func openDataFolder(_ sender: Any?) {
@@ -427,6 +442,10 @@ extension AppDelegate: WKScriptMessageHandlerWithReply {
                 NSWorkspace.shared.open(url)
             }
             reply(.success(true))
+        case "readWidgetActions":
+            reply(.success(WidgetBridge.readActions()))
+        case "writeWidgetAck":
+            reply(.success(WidgetBridge.writeAck(body["content"] as? String ?? "")))
         case "openURL":
             openMarkdownEditorURL(body["url"] as? String, reply: reply)
         case "openTextFile":

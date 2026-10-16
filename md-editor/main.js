@@ -5,13 +5,15 @@ const path = require('path');
 const Gantt = require('./gantt');
 const Exporter = require('./export');
 const Importer = require('./import');
+const NotesIndex = require('./notes-index');
 
 const MD_FILTERS = [{ name: 'Markdown', extensions: ['md', 'markdown', 'txt'] }];
 
 // One window per note. Each window has its own state, keyed by its webContents id.
-const wins = new Map(); // webContents.id → { win, filePath, dirty, forceClose, ready }
+const wins = new Map(); // webContents.id → { win, filePath, dirty, forceClose, ready, jump }
 let pendingOpens = [];
-let nightItem = null;
+let themePref = 'auto'; // 'auto' follows the system; 'light' / 'dark' are the user's manual choice
+const themeItems = {};
 
 const stateOf = (e) => wins.get(e.sender.id);
 const focusedState = () => {
@@ -26,7 +28,9 @@ function docInfo(p, content) {
 
 const samePath = (a, b) => a && b && path.resolve(a) === path.resolve(b);
 
-function createWindow(openPath) {
+const backgroundColor = () => (nativeTheme.shouldUseDarkColors ? '#1c1c1e' : '#ffffff');
+
+function createWindow(openPath, jump) {
   const from = focusedState();
   const at = from ? from.win.getPosition() : null;
   const win = new BrowserWindow({
@@ -36,7 +40,7 @@ function createWindow(openPath) {
     minWidth: 420,
     minHeight: 320,
     show: false,
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#1c1c1e' : '#ffffff',
+    backgroundColor: backgroundColor(),
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 18, y: 18 },
     webPreferences: {
@@ -47,7 +51,7 @@ function createWindow(openPath) {
     },
   });
   const id = win.webContents.id;
-  const st = { win, filePath: openPath || null, dirty: false, forceClose: false, ready: false };
+  const st = { win, filePath: openPath || null, dirty: false, forceClose: false, ready: false, jump: jump || null };
   wins.set(id, st);
 
   win.loadFile(path.join(__dirname, 'src', 'index.html'));
@@ -81,28 +85,34 @@ function createWindow(openPath) {
 }
 
 // Opens a note in its own window; focuses the window that already has it; reuses an untouched blank window.
-function openFile(p) {
+// `jump` ({ line, col, len }) makes the note scroll to that spot once it is showing (the window fetches it with doc:take-jump).
+function openFile(p, jump) {
   if (!p) return;
   for (const st of wins.values()) {
     if (samePath(st.filePath, p)) {
       if (st.win.isMinimized()) st.win.restore();
       st.win.show();
       st.win.focus();
+      if (jump) {
+        st.jump = jump;
+        if (st.ready) send(st, 'jump');
+      }
       return;
     }
   }
   const blank = [...wins.values()].find((st) => !st.filePath && !st.dirty);
   if (blank) {
     blank.filePath = p; // claim it now so a second request for the same file focuses this window
+    blank.jump = jump || null;
     if (blank.ready) send(blank, 'open-path', p); // otherwise did-finish-load sends it
     blank.win.show();
     blank.win.focus();
-  } else createWindow(p);
+  } else createWindow(p, jump);
 }
 
 function buildMenu() {
   const item = (label, accelerator, action) => ({ label, accelerator, click: () => send(focusedState(), action) });
-  nightItem = { label: 'Night Mode', type: 'checkbox', accelerator: 'CmdOrCtrl+Shift+D', click: () => send(focusedState(), 'night') };
+  const themeItem = (key, label) => (themeItems[key] = { label, type: 'radio', checked: themePref === key, click: () => applyThemePref(key) });
   Menu.setApplicationMenu(
     Menu.buildFromTemplate([
       { role: 'appMenu' },
@@ -125,6 +135,9 @@ function buildMenu() {
           item('Show in Gantt', 'CmdOrCtrl+Shift+G', 'gantt-open'),
           item('Unlink from Gantt', null, 'gantt-unlink'),
           item('Update Project Notes List', null, 'project-notes'),
+          item('Update Gantt Tables', null, 'gantt-tables'),
+          { type: 'separator' },
+          { label: 'Choose Notes Folder…', click: () => chooseNotesFolder() },
           { type: 'separator' },
           { role: 'close' },
         ],
@@ -140,6 +153,11 @@ function buildMenu() {
           { role: 'paste' },
           { label: 'Paste as Plain Text', accelerator: 'CmdOrCtrl+Shift+V', click: () => send(focusedState(), 'paste-plain', clipboard.readText()) },
           { role: 'selectAll' },
+          { type: 'separator' },
+          item('Find…', 'CmdOrCtrl+F', 'find'),
+          item('Find Next', 'CmdOrCtrl+G', 'find-next'),
+          item('Find Previous', 'CmdOrCtrl+Alt+G', 'find-prev'),
+          item('Search Notes…', 'CmdOrCtrl+Shift+F', 'search-notes'),
         ],
       },
       {
@@ -162,7 +180,11 @@ function buildMenu() {
         label: 'View',
         submenu: [
           item('Toggle Preview / Edit', 'CmdOrCtrl+/', 'toggle'),
-          nightItem,
+          item('Show Outline', 'CmdOrCtrl+Shift+O', 'outline'),
+          item('Backlinks', 'CmdOrCtrl+Shift+B', 'backlinks'),
+          { type: 'separator' },
+          { label: 'Appearance', submenu: [themeItem('auto', 'Auto (follow system)'), themeItem('light', 'Light'), themeItem('dark', 'Dark')] },
+          item('Toggle Night / Day', 'CmdOrCtrl+Shift+D', 'night'),
           { type: 'separator' },
           { role: 'resetZoom' },
           { role: 'zoomIn' },
@@ -289,12 +311,41 @@ const settingsFile = () => path.join(app.getPath('userData'), 'settings.json');
 const ganttStorageFile = () => path.join(os.homedir(), 'Library', 'Application Support', 'AcademicGantt', 'storage.json');
 const NOTE_RE = /\.(md|markdown|txt)$/i;
 
-function notesDir() {
+function readSettings() {
   try {
     const j = JSON.parse(fs.readFileSync(settingsFile(), 'utf8'));
-    if (typeof j.notesDir === 'string' && j.notesDir) return j.notesDir.replace(/^~(?=$|\/)/, os.homedir());
-  } catch {}
+    return j && typeof j === 'object' ? j : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeSettings(patch) {
+  const next = { ...readSettings(), ...patch };
+  fs.mkdirSync(path.dirname(settingsFile()), { recursive: true });
+  fs.writeFileSync(settingsFile(), JSON.stringify(next, null, 2) + '\n');
+}
+
+// The notes folder: where Gantt notes are created and the root of the whole-folder search (File → Choose Notes Folder…).
+function notesDir() {
+  const j = readSettings();
+  if (typeof j.notesDir === 'string' && j.notesDir) return j.notesDir.replace(/^~(?=$|\/)/, os.homedir());
   return path.join(os.homedir(), 'Documents', 'Gantt Notes');
+}
+
+async function chooseNotesFolder() {
+  const parent = BrowserWindow.getFocusedWindow() || undefined;
+  const cur = notesDir();
+  const r = await dialog.showOpenDialog(parent, {
+    title: 'Choose the notes folder',
+    message: 'Search, tags and backlinks look through this folder (and the folder of the open note).',
+    defaultPath: fs.existsSync(cur) ? cur : os.homedir(),
+    properties: ['openDirectory', 'createDirectory'],
+  });
+  if (r.canceled || !r.filePaths[0]) return;
+  writeSettings({ notesDir: r.filePaths[0] });
+  NotesIndex.forget();
+  for (const st of wins.values()) send(st, 'notes-folder', r.filePaths[0]);
 }
 
 const localToday = () => {
@@ -368,6 +419,89 @@ ipcMain.handle('gantt:link', (_e, { block, file }) =>
   typeof block === 'string' && path.isAbsolute(String(file)) ? askGantt('link', { block, path: file }, false) : { error: 'invalid' }
 );
 ipcMain.handle('gantt:unlink', (_e, block) => (typeof block === 'string' ? askGantt('unlink', { block }, false) : { error: 'invalid' }));
+
+// Gantt's storage.json is rewritten whenever Academic Gantt changes (including every Apple Calendar sync):
+// tell the windows so the auto-updating tables follow. Polled with watchFile (it survives atomic rewrites and a
+// folder that does not exist yet); debounced.
+let ganttTimer = null;
+function watchGanttStorage() {
+  fs.watchFile(ganttStorageFile(), { interval: 2000, persistent: false }, (cur, prev) => {
+    if (cur.mtimeMs === prev.mtimeMs && cur.size === prev.size) return;
+    clearTimeout(ganttTimer);
+    ganttTimer = setTimeout(() => {
+      for (const st of wins.values()) if (st.ready) send(st, 'gantt-changed');
+    }, 600);
+  });
+}
+
+// ---------- notes folder: search, tags, backlinks, [[wiki links]] ----------
+const indexFor = (file) => {
+  const f = typeof file === 'string' && path.isAbsolute(file) ? file : null;
+  return NotesIndex.getIndex(NotesIndex.rootsFor({ file: f, notesDir: notesDir() }));
+};
+const strArg = (v) => (typeof v === 'string' ? v : '');
+
+ipcMain.handle('notes:search', async (_e, { file, query, tag, caseSensitive } = {}) => {
+  const index = await indexFor(file);
+  const r = NotesIndex.search(index, strArg(query), { tag: strArg(tag), caseSensitive: !!caseSensitive });
+  return { ...r, tags: NotesIndex.tagCounts(index), roots: index.roots, files: index.notes.size, scanTruncated: index.truncated };
+});
+ipcMain.handle('notes:backlinks', async (_e, { file } = {}) => {
+  if (typeof file !== 'string' || !path.isAbsolute(file)) return { backlinks: [] };
+  return { backlinks: NotesIndex.backlinks(await indexFor(file), file) };
+});
+ipcMain.handle('notes:names', async (_e, { file } = {}) => ({ names: NotesIndex.names(await indexFor(file), strArg(file)) }));
+// targets → { target: absolute path | null }
+ipcMain.handle('notes:resolve', async (_e, { file, targets } = {}) => {
+  const index = await indexFor(file);
+  const map = {};
+  for (const t of Array.isArray(targets) ? targets.slice(0, 500) : []) {
+    const n = typeof t === 'string' ? NotesIndex.resolveLink(index, t, typeof file === 'string' ? file : '') : null;
+    if (typeof t === 'string') map[t] = n ? n.path : null;
+  }
+  return { map };
+});
+ipcMain.handle('notes:open', (_e, { path: p, line, col, len } = {}) => {
+  if (typeof p !== 'string' || !path.isAbsolute(p) || !NOTE_RE.test(p) || !fs.existsSync(p)) return { error: 'not-found' };
+  openFile(p, line ? { line: Number(line) || 1, col: Number(col) || 0, len: Number(len) || 0 } : null);
+  return {};
+});
+// Click on [[target]]: open the note, or (after asking) create it beside the current note.
+ipcMain.handle('notes:open-link', async (e, { file, target } = {}) => {
+  const st = stateOf(e);
+  if (typeof target !== 'string' || !target.trim()) return { error: 'invalid' };
+  const from = typeof file === 'string' && path.isAbsolute(file) ? file : '';
+  const hit = NotesIndex.resolveLink(await indexFor(from), target, from);
+  if (hit) {
+    openFile(hit.path);
+    return { path: hit.path };
+  }
+  const info = NotesIndex.newNotePath({ target, fromFile: from, notesDir: notesDir() });
+  const r = await dialog.showMessageBox(st.win, {
+    type: 'question',
+    message: `Create the note “${info.title}”?`,
+    detail: `It doesn’t exist yet. A new note will be created in\n${info.dir}`,
+    buttons: ['Create', 'Cancel'],
+    defaultId: 0,
+    cancelId: 1,
+  });
+  if (r.response !== 0) return { cancelled: true };
+  try {
+    const created = NotesIndex.createNote({ target, fromFile: from, notesDir: notesDir() });
+    NotesIndex.forget();
+    openFile(created);
+    return { path: created, created: true };
+  } catch (err) {
+    return { error: err.message };
+  }
+});
+ipcMain.handle('notes:choose-folder', () => chooseNotesFolder());
+ipcMain.handle('doc:take-jump', (e) => {
+  const st = stateOf(e);
+  const j = st && st.jump;
+  if (st) st.jump = null;
+  return j || null;
+});
 
 // ---------- images pasted / dropped into a note: saved beside the note ----------
 const IMAGE_EXT_RE = /\.(png|jpe?g|gif|webp|bmp|svg|tiff?|heic|avif)$/i;
@@ -468,11 +602,28 @@ ipcMain.on('win:close-now', (e) => {
   st.forceClose = true;
   st.win.close();
 });
-ipcMain.on('ui:theme', (_e, dark) => {
-  nativeTheme.themeSource = dark ? 'dark' : 'light';
-  for (const st of wins.values()) st.win.setBackgroundColor(dark ? '#1c1c1e' : '#ffffff');
-  if (nightItem) nightItem.checked = !!dark;
-});
+// ---------- appearance: Auto (follows the system, live) / Light / Dark ----------
+const THEME_PREFS = ['auto', 'light', 'dark'];
+
+function updateBackgrounds() {
+  for (const st of wins.values()) if (!st.win.isDestroyed()) st.win.setBackgroundColor(backgroundColor());
+}
+
+function applyThemePref(pref, { persist = true } = {}) {
+  if (!THEME_PREFS.includes(pref)) return;
+  themePref = pref;
+  // 'system' makes prefers-color-scheme in the windows track the OS, so Auto flips when the system does.
+  nativeTheme.themeSource = pref === 'auto' ? 'system' : pref;
+  updateBackgrounds();
+  for (const [key, mi] of Object.entries(themeItems)) mi.checked = key === pref;
+  if (persist) writeSettings({ theme: pref });
+  for (const st of wins.values()) send(st, 'theme-pref', pref);
+}
+
+nativeTheme.on('updated', updateBackgrounds);
+// { pref, stored }: `stored` is false until the user (or the first run of a window) has saved a choice.
+ipcMain.handle('ui:get-theme-pref', () => ({ pref: themePref, stored: THEME_PREFS.includes(readSettings().theme) }));
+ipcMain.on('ui:theme-pref', (_e, pref) => applyThemePref(pref));
 
 // Links dropped into a note or written by hand: file:// opens the file (notes open in their own window), web links open in the browser.
 const RISKY_EXT = /\.(app|command|sh|bash|zsh|terminal|workflow|action|pkg|dmg|jar|scpt|scptd|js|py|pl|rb|exe|bat|cmd)$/i;
@@ -519,7 +670,11 @@ app.on('open-url', (e, url) => {
 });
 
 app.whenReady().then(() => {
+  const saved = readSettings().theme;
+  if (THEME_PREFS.includes(saved)) themePref = saved;
+  nativeTheme.themeSource = themePref === 'auto' ? 'system' : themePref;
   buildMenu();
+  watchGanttStorage();
   const args = process.argv.slice(app.isPackaged ? 1 : 2).filter((a) => NOTE_RE.test(a)).map((a) => path.resolve(a));
   const first = [...pendingOpens, ...args];
   pendingOpens = [];

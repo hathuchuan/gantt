@@ -80,7 +80,7 @@ Cách app giữ dữ liệu an toàn:
 - **⌘-nhấp** vào một thanh trên Gantt (hoặc nhấp biểu tượng 📄 trên thanh) → mở ghi chú của khối đó trong **MD Editor**; chưa có thì MD Editor tự tạo ghi chú mới rồi gửi đường dẫn về Gantt. Nhấp thường vẫn là đánh dấu hoàn thành.
 - Từ MD Editor: `⇧⌘G` (hoặc bấm nhãn trên Preview) → Gantt hiện ra, cuộn tới đúng khối và nhấp nháy. `⇧⌘E` / `/gantt` để gắn một ghi chú có sẵn vào khối.
 - Hai ứng dụng nói chuyện qua URL: `mdeditor://note?...` (Gantt → MD Editor) và `academicgantt://open|link|unlink?block=...` (MD Editor → Gantt). Mã khối có dạng `<mã dự án>|<loại>|<số>`.
-- Liên kết lưu ở khóa `academic_smart_gantt_notes` trong `storage.json` (tách khỏi danh sách dự án nên không mất khi đồng bộ Calendar). Chưa nằm trong **Xuất JSON**.
+- Liên kết lưu ở khóa `academic_smart_gantt_notes` trong `storage.json` (tách khỏi danh sách dự án nên không mất khi đồng bộ Calendar). **Xuất JSON** có thêm mục `noteLinks` (mã khối → đường dẫn ghi chú); **Nạp JSON** khôi phục lại các liên kết này.
 
 ## 3d. Giao diện mới
 
@@ -91,6 +91,18 @@ Cách app giữ dữ liệu an toàn:
 - **Ghi chú dự án:** nút **📝 Thêm ghi chú / 📄 Mở ghi chú** trong cửa sổ chỉnh sửa dự án mở MD Editor (khối `<mã dự án>|project|0`).
 - **Tự cập nhật Apple Calendar:** khi mở ứng dụng, khi quay lại cửa sổ và mỗi 5 phút (các lịch đã chọn ở tab 🍎 Đồng Bộ Mac; cần bấm "Kéo Lịch" một lần để ghi nhớ lịch). Tắt được bằng ô tick trong tab đó.
 - **Menu chuột phải:** trên khối (hoàn thành, ghi chú, chỉnh sửa, xem tuần/tháng), trên dự án ở cột trái (chỉnh sửa, ghi chú, hoàn thành cả dự án, tới khối kế tiếp, xóa), trên đầu cột ngày / vùng trống (chi tiết ngày, tải công việc, tuần/tháng, về hôm nay).
+
+## 3e. Bản mới: phân loại màu, kéo-thả, hoàn tác, tìm kiếm
+
+- **Phân loại & màu (không còn MBA / ĐH / DN):** event từ lịch **FSB** → xanh dương; **RMIT** → đỏ; **Outlook** (mọi lịch còn lại) → hồng nhạt; **Tư vấn doanh nghiệp** → xanh lá; **Nghiên cứu** → tím. Dữ liệu cũ tự quy đổi theo tiền tố tên (FSB…/RMIT…), còn lại thành Outlook. Đổi loại bất kỳ lúc nào trong cửa sổ chỉnh sửa dự án.
+- **Màu dòng:** mỗi dòng mang màu của loại dự án (không còn xen kẽ trắng/xanh); hai dòng liền nhau cùng loại thay phiên hai sắc độ cùng tông. Dự án **đã hoàn thành** tô **xám**.
+- **Kéo-thả:** kéo thanh để dời (buổi dạy / mốc Submit / sản phẩm / chấm thi; kéo buổi dạy thì ngày soạn bài đi theo); kéo **mép trái** thanh *soạn bài* hoặc *đề cương* để đổi độ dài; kéo **hai mép** thanh *chấm thi*. `Esc` khi đang kéo = hủy. Nhấp thường vẫn là đánh dấu hoàn thành. Lưu ý: buổi đã dời khỏi ngày trên Calendar sẽ được đồng bộ Calendar thêm lại ở ngày gốc (giống khi sửa ngày buổi trong cửa sổ chỉnh sửa).
+- **⌘Z / ⇧⌘Z:** hoàn tác / làm lại mọi chỉnh sửa (kéo-thả, hoàn thành, sửa, xóa, nạp JSON…; tối đa 100 bước). Đang gõ chữ trong ô nhập thì ⌘Z là của ô nhập. Cập nhật tự động từ Calendar và từ widget không nằm trong lịch sử hoàn tác.
+- **Sáng / Tối:** nút ở đầu trang xoay vòng **🌗 Tự động** (theo macOS, đổi ngay khi hệ thống đổi) → Sáng/Tối cố định → Tự động.
+- **Tìm kiếm toàn cục & lọc:** ô tìm ở đầu biểu đồ (`⌘F`, không phân biệt dấu) tìm trong tên dự án, buổi, địa điểm, tạp chí, ghi chú; danh sách kết quả bấm để nhảy tới khối. Kết hợp với lọc **loại** (chip màu), **trạng thái** (chưa xong / đang diễn ra / sắp tới / quá hạn / chờ review / hoàn thành) và **địa điểm**; nút **✕ Bỏ lọc**.
+- **Cảnh báo xung đột lịch:** hộp *Xung đột lịch* ở cột trái liệt kê (1) buổi giảng **trùng giờ** (thanh bị viền đỏ + ⚠️) và (2) tuần **quá tải** — quá 12 giờ giảng/tuần (đổi ngưỡng bằng nút ⚙️ Ngưỡng) hoặc có ngày ≥ 3 lớp cùng chuẩn bị (đầu cột thứ Hai của tuần đó có vạch cam 📊). Bấm một dòng để tới ngày đó.
+- **Ô Tải công việc:** bấm vào **bất kỳ dòng công việc** (kể cả mục quá hạn) → mở/tạo ghi chú Markdown của khối; **chuột phải** → thêm/mở ghi chú hoặc chỉnh sửa dự án (và hoàn thành, xem tuần/tháng).
+- **Widget iPhone:** có thể đánh dấu hoàn thành và tự đồng bộ về app Mac — xem `ios/README.md`.
 
 ## 4. Những gì thay đổi so với `sync_server.py`
 
@@ -108,7 +120,7 @@ Tệp HTML vẫn mở được bằng trình duyệt như cũ: khi đó nó dùn
 ## 5. Build phiên bản mới
 
 - **Tự động (khuyến nghị):** push lên GitHub → workflow `Build macOS app` build DMG, chạy tự kiểm tra và bộ kiểm thử "tắt/mở lại app" (`macos/tests/persist.sh`, chạy app thật rồi thoát bằng ⌘Q / đóng cửa sổ / `kill -9` / tệp hỏng / tải lại trang), đưa DMG vào Artifacts. Muốn có link tải cố định: tạo **Release** với tag dạng `v3.1.1` → DMG được gắn vào Release, số phiên bản lấy từ tag.
-- **Kiểm thử giao diện (Chromium):** `cd tests/web && npm install && npx playwright install chromium && node run.js` (cũng chạy tự động trên GitHub Actions). Các bộ test kiểm tra tải công việc, quá hạn, trạng thái review, địa điểm Online, thời lượng, phím Esc, nạp/xuất JSON, lưu dữ liệu và khôi phục khi dữ liệu hỏng.
+- **Kiểm thử giao diện (Chromium):** `cd tests/web && npm install && npx playwright install chromium && node run.js` (cũng chạy tự động trên GitHub Actions). Các bộ test kiểm tra tải công việc, quá hạn, trạng thái review, địa điểm Online, thời lượng, phím Esc, nạp/xuất JSON, lưu dữ liệu và khôi phục khi dữ liệu hỏng, phân loại màu, kéo-thả, hoàn tác, xung đột lịch, tìm kiếm/lọc và widget iPhone.
 - **Trên máy Mac:** cài Xcode Command Line Tools một lần (`xcode-select --install`), rồi chạy `./macos/build.sh`. Kết quả nằm trong `macos/build/`.
 - **Sửa giao diện:** chỉ sửa `web/academic_gantt_planner.html` rồi build lại.
 

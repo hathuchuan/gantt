@@ -19,10 +19,10 @@ const SETUP = `
       sessions: offs.map(function (o, i) { return { num: i + 1, title: 'Buổi ' + (i + 1), prepStart: d(o - 2), teachDate: d(o), startTime: '18:00', durationHours: 3 }; }) }, extra || {});
   };
   courses = normalizeCourses([
-    mk('Hôm nay', 'Giảng dạy MBA', [-7, 0, 7]),
-    mk('Trong kỳ', 'Giảng dạy Đại học', [-3, 4, 11]),
-    mk('Chưa bắt đầu', 'Đào tạo DN', [5, 12]),
-    mk('Đã hết kỳ', 'Giảng dạy MBA', [-20, -10]),
+    mk('Hôm nay', 'FSB', [-7, 0, 7]),
+    mk('Trong kỳ', 'RMIT', [-3, 4, 11]),
+    mk('Chưa bắt đầu', 'Outlook', [5, 12]),
+    mk('Đã hết kỳ', 'FSB', [-20, -10]),
     { name: 'Bài báo', category: 'Nghiên cứu', submissions: [{ num: 1, title: 'Submit 1', date: d(2), journal: 'EJOR' }], sessions: [] },
     { name: 'Tư vấn', category: 'Tư vấn doanh nghiệp', deliverables: [{ num: 1, title: 'Báo cáo', date: d(40) }], sessions: [] }
   ]);
@@ -69,10 +69,10 @@ function nativeMock(events) {
     check('Lớp chưa bắt đầu / đã hết kỳ / nghiên cứu / tư vấn: không highlight',
       ['Chưa bắt đầu', 'Đã hết kỳ', 'Bài báo', 'Tư vấn'].every(n => !cls[n].today && !cls[n].term), cls);
     const colors = await page.evaluate(() => {
-      const bg = sel => getComputedStyle(document.querySelector(sel)).backgroundColor;
-      return { today: bg('.row-teach-today'), term: bg('.row-teach-term') };
+      const sh = sel => getComputedStyle(document.querySelector(sel)).boxShadow;
+      return { today: sh('.row-teach-today'), term: sh('.row-teach-term') };
     });
-    check('Hai mức highlight có màu khác nhau', colors.today !== colors.term, colors);
+    check('Hai mức highlight có viền/dải màu khác nhau', colors.today !== colors.term && colors.today !== 'none', colors);
 
     // 2) Cột hôm nay: tô hồng, không còn đường kẻ đỏ
     const todayCol = await page.evaluate(() => {
@@ -123,7 +123,7 @@ function nativeMock(events) {
     const lightBg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
     await page.click('#btnTheme');
     const dark = await page.evaluate(() => ({ t: document.documentElement.dataset.theme, bg: getComputedStyle(document.body).backgroundColor, saved: localStorage.getItem('academic_smart_gantt_theme'), btn: document.getElementById('btnTheme').textContent }));
-    check('Bật dark mode: data-theme, nền tối, lưu lựa chọn', dark.t === 'dark' && dark.bg !== lightBg && dark.saved === 'dark' && dark.btn.includes('Sáng'), dark);
+    check('Bật dark mode: data-theme, nền tối, lưu lựa chọn', dark.t === 'dark' && dark.bg !== lightBg && dark.saved === 'dark' && dark.btn.includes('Tối'), dark);
     await page.reload();
     check('Dark mode còn sau khi tải lại', (await page.evaluate(() => document.documentElement.dataset.theme)) === 'dark');
     await page.evaluate(SETUP);
@@ -133,7 +133,7 @@ function nativeMock(events) {
 
     // 5) Menu chuột phải
     const labels = async () => page.$$eval('#ctxMenu .ctx-item', els => els.map(e => e.textContent));
-    await page.click('.bar.bar-teach-dh', { button: 'right' });
+    await page.click('.bar.bar-teach-rmit', { button: 'right' });
     let items = await labels();
     check('Chuột phải thanh: menu hiện', await page.isVisible('#ctxMenu'), items);
     check('Menu thanh: hoàn thành / ghi chú / chỉnh sửa / tuần / tháng',
@@ -141,7 +141,7 @@ function nativeMock(events) {
     check('Chuột phải thanh không đổi trạng thái hoàn thành', await page.evaluate(() => !courses.find(x => x.name === 'Trong kỳ').sessions.some(s => s.teachDone)));
     await page.keyboard.press('Escape');
     check('Esc đóng menu (không đóng gì khác)', !(await page.isVisible('#ctxMenu')));
-    await page.click('.bar.bar-teach-dh', { button: 'right' });
+    await page.click('.bar.bar-teach-rmit', { button: 'right' });
     await page.click('#ctxMenu .ctx-item:has-text("Đánh dấu hoàn thành")');
     check('Menu thanh → đánh dấu hoàn thành', await page.evaluate(() => courses.find(x => x.name === 'Trong kỳ').sessions.some(s => s.teachDone)));
     await page.click('.bar.is-done', { button: 'right' });

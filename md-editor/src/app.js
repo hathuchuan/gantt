@@ -15,7 +15,10 @@
   let cmdConfig = {};
   let items = E.buildItems();
 
-  marked.use({ extensions: MarkedMath.extensions });
+  marked.use({ extensions: [...MarkedMath.extensions, NotesCore.markedWikiLink] });
+  // Other modules (panels.js: find, outline, notes search) plug into these.
+  const hooks = { render: [], input: [], doc: [], mode: [] };
+  const fire = (k) => hooks[k].forEach((f) => f());
   // DOMPurify's default drops file: links, which is what dropped files become.
   const SAFE_URI = /^(?:(?:https?|file|mailto|tel):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i;
   const el = (tag, cls, text) => {
@@ -44,6 +47,7 @@
   function onInput() {
     updateState();
     updateSlash();
+    fire('input');
   }
 
   function updateState() {
@@ -57,7 +61,10 @@
   editor.addEventListener('click', (e) => {
     hideSlash();
     // ⌘-click a link in the source to open it.
-    const href = e.metaKey && editor.selectionStart === editor.selectionEnd ? E.linkAt(editor.value, editor.selectionStart) : '';
+    const caret = editor.selectionStart === editor.selectionEnd && e.metaKey;
+    const wiki = caret ? NotesCore.wikiLinkAt(editor.value, editor.selectionStart) : '';
+    if (wiki) return void api.notesOpenLink({ file: docPath, target: wiki });
+    const href = caret ? E.linkAt(editor.value, editor.selectionStart) : '';
     if (href) api.openExternal(new URL(href, document.baseURI).href);
   });
   editor.addEventListener('blur', hideSlash);
@@ -184,6 +191,32 @@
     return xy;
   }
 
+  // y (px, from the top of the scrollable text) of each text offset in `list` (ascending) — for outline and find.
+  function offsetsY(list) {
+    const cs = getComputedStyle(editor);
+    const m = document.createElement('div');
+    for (const p of ['font', 'letterSpacing', 'tabSize', 'paddingTop', 'paddingLeft', 'paddingRight', 'lineHeight']) {
+      m.style[p] = cs[p];
+    }
+    Object.assign(m.style, { position: 'absolute', visibility: 'hidden', whiteSpace: 'pre-wrap', wordWrap: 'break-word', top: '0', left: '0', width: editor.clientWidth + 'px' });
+    const v = editor.value;
+    const marks = [];
+    let prev = 0;
+    for (const pos of list) {
+      m.append(document.createTextNode(v.slice(prev, pos)));
+      const mark = document.createElement('span');
+      mark.textContent = '​';
+      m.append(mark);
+      marks.push(mark);
+      prev = pos;
+    }
+    m.append(document.createTextNode(v.slice(prev)));
+    document.body.appendChild(m);
+    const ys = marks.map((mark) => mark.offsetTop);
+    m.remove();
+    return ys;
+  }
+
   function updateSlash() {
     const q = E.slashQuery(editor.value, editor.selectionStart);
     const found = q ? E.filterSlash(q.query, items, { lineStart: q.lineStart }) : [];
@@ -303,6 +336,7 @@
     const fm = E.parseFrontMatter(editor.value);
     renderInto(preview, fm.body);
     if (fm.meta['gantt-block']) preview.prepend(ganttCard(fm.meta));
+    fire('render');
   }
 
   function setMode(next) {
@@ -315,7 +349,7 @@
       renderPreview();
       preview.hidden = false;
       editor.hidden = true;
-      refreshProjectNotes().then((changed) => changed && mode === 'preview' && renderPreview());
+      refreshLive().then((changed) => changed && mode === 'preview' && renderPreview());
     } else {
       preview.hidden = true;
       editor.hidden = false;
@@ -324,6 +358,7 @@
     const dst = mode === 'preview' ? preview : editor;
     dst.scrollTop = ratio * (dst.scrollHeight - dst.clientHeight);
     $('toggle').title = mode === 'edit' ? 'Preview (⌘/)' : 'Edit (⌘/)';
+    fire('mode');
   }
 
   $('toggle').addEventListener('click', () => setMode(mode === 'edit' ? 'preview' : 'edit'));
@@ -332,6 +367,7 @@
     const a = e.target.closest('a');
     if (!a) return;
     e.preventDefault();
+    if (a.classList.contains('wikilink')) return void api.notesOpenLink({ file: docPath, target: a.dataset.wiki });
     const href = a.getAttribute('href') || '';
     if (href.startsWith('#')) document.getElementById(decodeURIComponent(href.slice(1)))?.scrollIntoView();
     else api.openExternal(a.href);
@@ -604,6 +640,41 @@
     toast('Project notes list is up to date');
   }
 
+  // ---------- auto-updating Gantt tables ----------
+  // Re-renders every <!-- gantt-blocks project="…" --> table from Gantt's data. Resolves true when the text changed,
+  // false when it is already current, null when Gantt's data could not be read (the tables stay as they are).
+  async function refreshGanttBlocks() {
+    const projects = E.ganttBlocksProjects(editor.value);
+    if (!projects.length) return false;
+    const tables = new Map();
+    const now = new Date();
+    let unreadable = false;
+    for (const project of projects) {
+      const r = await api.ganttBlocks({ course: project, all: true });
+      if (!r || r.error || !r.blocks) unreadable = true;
+      else if (r.blocks.length) tables.set(project, E.ganttBlocksBlock({ project, course: r.blocks[0].course, blocks: r.blocks, now }));
+    }
+    if (!tables.size) return unreadable ? null : false;
+    const next = E.updateGanttBlocks(editor.value, tables);
+    if (next === null) return false;
+    replaceText(next);
+    return true;
+  }
+
+  // Everything that follows Gantt: the project notes list and the tasks tables.
+  async function refreshLive() {
+    const notes = await refreshProjectNotes();
+    const tables = await refreshGanttBlocks();
+    return notes || tables === true;
+  }
+
+  async function updateGanttTablesCommand() {
+    if (!E.hasGanttBlocks(editor.value)) return toast('No Gantt tables in this note — add one with /ganttblocks.');
+    const changed = await refreshGanttBlocks();
+    if (changed && mode === 'preview') renderPreview();
+    toast(changed === null ? GANTT_ERRORS['no-data'] : changed ? 'Gantt tables updated' : 'Gantt tables are up to date');
+  }
+
   // ---------- Gantt tasks table ----------
   function openProjectSheet(onPick) {
     const input = el('input', 'filter');
@@ -677,9 +748,11 @@
     if (!r.blocks.length) return toast('That project has no blocks.');
     if (mode === 'preview') setMode('edit');
     editor.focus();
-    const today = new Date();
-    const caption = `**${r.blocks[0].course}** — tasks & deadlines (as of ${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')})`;
-    applyEdit(E.insertBlock(editor.value, editor.selectionStart, editor.selectionEnd, caption + '\n\n' + E.ganttTable(r.blocks)));
+    const block = E.ganttBlocksBlock({ project: courseId, course: r.blocks[0].course, blocks: r.blocks });
+    // Running /ganttblocks again for the same project refreshes the table that is already there.
+    const { edit, replaced } = E.upsertGanttBlocks(editor.value, editor.selectionStart, editor.selectionEnd, courseId, block);
+    applyEdit(edit);
+    if (replaced) toast('This note already has the table — refreshed it');
   }
 
   function ganttTableCommand() {
@@ -696,8 +769,9 @@
     if (kind === 'pdf') {
       const holder = document.createElement('div');
       renderInto(holder, body);
+      holder.querySelectorAll('a.wikilink').forEach((a) => a.replaceWith(a.textContent)); // [[links]] are plain text on paper
       r = await api.exportPdf({ html: holder.innerHTML });
-    } else r = await api.exportDocx({ markdown: body, title: name.replace(/\.[^.]+$/, '') });
+    } else r = await api.exportDocx({ markdown: NotesCore.wikiLinksToText(body), title: name.replace(/\.[^.]+$/, '') });
     if (!r) return void ($('toast').hidden = true);
     toast(r.error ? 'Couldn’t export: ' + r.error : 'Exported to ' + r.path.split('/').pop());
   }
@@ -715,14 +789,34 @@
   }
 
   // ---------- theme ----------
-  function setNight(on) {
-    document.documentElement.dataset.theme = on ? 'dark' : 'light';
-    try {
-      localStorage.setItem('night', on ? '1' : '0');
-    } catch {}
-    api.setTheme(on);
-  }
+  // Auto (default) follows the system live; Light / Dark are the user's manual choice. The main process owns the
+  // saved choice (settings.json) and keeps nativeTheme in step, so prefers-color-scheme tracks the OS while in Auto.
+  const THEMES = ['auto', 'light', 'dark'];
+  const darkQuery = matchMedia('(prefers-color-scheme: dark)');
   const isNight = () => document.documentElement.dataset.theme === 'dark';
+  let themePref = THEMES.includes(document.documentElement.dataset.themePref) ? document.documentElement.dataset.themePref : 'auto';
+
+  function applyTheme(pref) {
+    if (THEMES.includes(pref)) themePref = pref;
+    const dark = themePref === 'dark' || (themePref === 'auto' && darkQuery.matches);
+    document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+    document.documentElement.dataset.themePref = themePref;
+    try {
+      localStorage.setItem('theme', themePref); // read by theme-init.js before the first paint
+    } catch {}
+  }
+
+  // ⇧⌘D: flip to the other look and keep it (a manual choice). Back to Auto: View → Appearance.
+  function toggleNight() {
+    applyTheme(isNight() ? 'light' : 'dark');
+    api.setThemePref(themePref);
+  }
+
+  darkQuery.addEventListener('change', () => themePref === 'auto' && applyTheme());
+  api.getThemePref().then(({ pref, stored }) => {
+    if (!stored && themePref !== 'auto') api.setThemePref(themePref); // first run after the Auto update: keep an earlier Night Mode choice
+    else applyTheme(pref);
+  });
 
   // ---------- files ----------
   function loadDoc(doc) {
@@ -738,11 +832,12 @@
     editor.scrollTop = 0;
     if (mode === 'preview') setMode('preview');
     updateState();
-    refreshProjectNotes();
+    refreshLive().then((changed) => changed && mode === 'preview' && renderPreview());
+    fire('doc');
   }
 
   async function save(as) {
-    await refreshProjectNotes();
+    await refreshLive();
     const doc = await (as ? api.saveAs(editor.value) : api.save(editor.value));
     if (!doc) return false;
     saved = doc.content;
@@ -763,12 +858,41 @@
     if (!(await canDiscard())) return;
     try {
       loadDoc(await api.readPath(p));
-    } catch {}
+    } catch {
+      return;
+    }
+    takeJump();
+  }
+
+  // A search result / backlink asked for this note to open at a given line: { line, col, len }.
+  function jumpTo({ line, col, len }) {
+    if (mode === 'preview') setMode('edit');
+    const lines = editor.value.split('\n');
+    const at = Math.min(Math.max(1, line), lines.length) - 1;
+    const start = lines.slice(0, at).reduce((n, l) => n + l.length + 1, 0);
+    const from = start + (len ? Math.min(col, lines[at].length) : 0);
+    const to = len ? from + len : start + lines[at].length;
+    editor.focus();
+    editor.setSelectionRange(from, to);
+    editor.scrollTop = Math.max(0, offsetsY([from])[0] - editor.clientHeight / 3);
+  }
+
+  async function takeJump() {
+    const j = await api.takeJump();
+    if (j) jumpTo(j);
   }
 
   const actions = {
     toggle: () => setMode(mode === 'edit' ? 'preview' : 'edit'),
-    night: () => setNight(!isNight()),
+    night: toggleNight,
+    'theme-pref': applyTheme,
+    'gantt-tables': updateGanttTablesCommand,
+    'gantt-changed': () => {
+      // Gantt's data changed (e.g. a Calendar sync): follow it, but never rewrite a note the user is typing in.
+      if (mode === 'preview' || !isDirty()) refreshLive().then((changed) => changed && mode === 'preview' && renderPreview());
+    },
+    jump: takeJump,
+    toast,
     commands: openCommandsSheet,
     gantt: openGanttSheet,
     'gantt-open': showInGantt,
@@ -815,17 +939,19 @@
     if (ed) applyEdit(ed);
   });
 
-  // The Night Mode toggle in one note window applies to all of them.
-  addEventListener('storage', (e) => {
-    if (e.key === 'night') document.documentElement.dataset.theme = e.newValue === '1' ? 'dark' : 'light';
-  });
-
   addEventListener('focus', () => {
     reloadCommands();
-    if (!isDirty() && sheet.hidden) refreshProjectNotes().then((changed) => changed && mode === 'preview' && renderPreview());
+    if (!isDirty() && sheet.hidden) refreshLive().then((changed) => changed && mode === 'preview' && renderPreview());
   });
   reloadCommands();
-  setNight(isNight());
+  applyTheme();
   updateState();
   editor.focus();
+
+  window.AppCtx = {
+    editor, preview, el, toast, hooks, offsetsY, caretXY, applyEdit, setMode, jumpTo, actions,
+    getMode: () => mode,
+    getDocPath: () => docPath,
+    isDirty,
+  };
 })();
