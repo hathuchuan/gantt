@@ -444,7 +444,7 @@
   // Backlinks at the end of the preview.
   async function appendBacklinks() {
     const file = C.getDocPath();
-    if (!file) return;
+    if (!file || C.getKind() !== 'md') return;
     const r = await api.notesBacklinks({ file });
     if (!r || !r.backlinks.length || isEdit() || C.getDocPath() !== file) return;
     preview.querySelector('.backlinks')?.remove();

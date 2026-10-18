@@ -353,10 +353,25 @@ ${base}
 }
 
 // `electron` is required lazily so the Markdown → DOCX half can run under plain Node (tests).
-async function htmlToPdf(bodyHtml, { baseDir } = {}) {
+// A whole web page (not a note's body) is printed as written; <base> keeps its relative pictures and styles working.
+function withBase(html, baseDir) {
+  if (!baseDir) return html;
+  const tag = `<base href="${fileUrl(baseDir.replace(/\/?$/, '/'))}">`;
+  for (const re of [/<head(?:\s[^>]*)?>/i, /<html(?:\s[^>]*)?>/i]) {
+    const m = re.exec(html);
+    if (m) {
+      const at = m.index + m[0].length;
+      return html.slice(0, at) + (re.source.startsWith('<head') ? tag : `<head>${tag}</head>`) + html.slice(at);
+    }
+  }
+  const doctype = /^\s*<!doctype[^>]*>/i.exec(html);
+  return doctype ? doctype[0] + tag + html.slice(doctype[0].length) : tag + html;
+}
+
+async function htmlToPdf(bodyHtml, { baseDir, raw } = {}) {
   const { BrowserWindow } = require('electron');
   const tmp = path.join(os.tmpdir(), `mdeditor-export-${process.pid}-${Date.now()}.html`);
-  fs.writeFileSync(tmp, exportHtml(bodyHtml, baseDir));
+  fs.writeFileSync(tmp, raw ? withBase(bodyHtml, baseDir) : exportHtml(bodyHtml, baseDir));
   const win = new BrowserWindow({ show: false, webPreferences: { javascript: false, sandbox: true, contextIsolation: true } });
   try {
     await win.loadFile(tmp);
@@ -371,4 +386,4 @@ async function htmlToPdf(bodyHtml, { baseDir } = {}) {
   }
 }
 
-module.exports = { markdownToDocx, htmlToPdf, exportHtml, imageInfo };
+module.exports = { markdownToDocx, htmlToPdf, exportHtml, withBase, imageInfo };

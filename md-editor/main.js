@@ -8,6 +8,17 @@ const Importer = require('./import');
 const NotesIndex = require('./notes-index');
 
 const MD_FILTERS = [{ name: 'Markdown', extensions: ['md', 'markdown', 'txt'] }];
+const HTML_FILTERS = [{ name: 'Web page', extensions: ['html', 'htm'] }];
+const JSON_FILTERS = [{ name: 'JSON', extensions: ['json'] }];
+const ALL_FILTERS = [{ name: 'Notes, web pages and JSON', extensions: ['md', 'markdown', 'txt', 'html', 'htm', 'json'] }, ...MD_FILTERS, ...HTML_FILTERS, ...JSON_FILTERS];
+// Files the editor opens from the command line: notes, web pages and JSON.
+const DOC_RE = /\.(md|markdown|txt|html?|json)$/i;
+
+// The Save dialog starts on the kind of file being edited (the window sends its name, e.g. Untitled.html).
+function saveFilters(name) {
+  const first = /\.html?$/i.test(name || '') ? HTML_FILTERS : /\.json$/i.test(name || '') ? JSON_FILTERS : MD_FILTERS;
+  return [...first, ...[MD_FILTERS, HTML_FILTERS, JSON_FILTERS].filter((f) => f !== first).flat()];
+}
 
 // One window per note. Each window has its own state, keyed by its webContents id.
 const wins = new Map(); // webContents.id → { win, filePath, dirty, forceClose, ready, jump }
@@ -30,7 +41,7 @@ const samePath = (a, b) => a && b && path.resolve(a) === path.resolve(b);
 
 const backgroundColor = () => (nativeTheme.shouldUseDarkColors ? '#1c1c1e' : '#ffffff');
 
-function createWindow(openPath, jump) {
+function createWindow(openPath, jump, newKind) {
   const from = focusedState();
   const at = from ? from.win.getPosition() : null;
   const win = new BrowserWindow({
@@ -59,6 +70,7 @@ function createWindow(openPath, jump) {
   win.webContents.on('did-finish-load', () => {
     st.ready = true;
     if (st.filePath) send(st, 'open-path', st.filePath);
+    else if (newKind) send(st, 'new-kind', newKind);
   });
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.webContents.on('will-navigate', (e) => e.preventDefault());
@@ -120,6 +132,8 @@ function buildMenu() {
         label: 'File',
         submenu: [
           { label: 'New', accelerator: 'CmdOrCtrl+N', click: () => createWindow() },
+          { label: 'New HTML Page', accelerator: 'CmdOrCtrl+Alt+N', click: () => createWindow(null, null, 'html') },
+          { label: 'New JSON File', accelerator: 'CmdOrCtrl+Alt+Shift+N', click: () => createWindow(null, null, 'json') },
           { label: 'Open…', accelerator: 'CmdOrCtrl+O', click: () => openDialog() },
           { type: 'separator' },
           item('Save', 'CmdOrCtrl+S', 'save'),
@@ -167,11 +181,32 @@ function buildMenu() {
           item('Italic', 'CmdOrCtrl+I', 'fmt:italic'),
           item('Strikethrough', 'CmdOrCtrl+Shift+X', 'fmt:strike'),
           item('Inline Code', 'CmdOrCtrl+E', 'fmt:code'),
+          item('Underline', 'CmdOrCtrl+U', 'fmt:underline'),
+          item('Highlight', 'CmdOrCtrl+Shift+H', 'fmt:highlight'),
           item('Link', 'CmdOrCtrl+K', 'fmt:link'),
+          { type: 'separator' },
+          item('Text Color…', null, 'fmt:color-menu'),
+          item('Highlight Color…', null, 'fmt:bg-menu'),
+          {
+            label: 'Text Size (web page)',
+            submenu: [['Small', '0.85em'], ['Normal', ''], ['Large', '1.25em'], ['Larger', '1.6em'], ['Huge', '2.2em']].map(([l, v]) => item(l, null, 'fmt:size:' + v)),
+          },
+          {
+            label: 'Align (web page)',
+            submenu: [['Left', 'left', 'Alt+Shift+L'], ['Center', 'center', 'Alt+Shift+E'], ['Right', 'right', 'Alt+Shift+R'], ['Justify', 'justify', null]].map(([l, v, a]) => item(l, a, 'fmt:align:' + v)),
+          },
+          item('Bullet List (web page)', null, 'fmt:ul'),
+          item('Numbered List (web page)', null, 'fmt:ol'),
+          item('Quote (web page)', null, 'fmt:quote'),
+          item('Remove Formatting', 'CmdOrCtrl+\\', 'fmt:clear'),
           { type: 'separator' },
           item('Heading 1', 'CmdOrCtrl+1', 'fmt:h1'),
           item('Heading 2', 'CmdOrCtrl+2', 'fmt:h2'),
           item('Heading 3', 'CmdOrCtrl+3', 'fmt:h3'),
+          { type: 'separator' },
+          { type: 'separator' },
+          item('Format JSON', 'Alt+Shift+F', 'format-doc'),
+          item('Open Page in Browser', 'CmdOrCtrl+Alt+B', 'open-browser'),
           { type: 'separator' },
           item('Commands…', null, 'commands'),
         ],
@@ -208,17 +243,18 @@ async function saveTo(st, target, content) {
   return docInfo(target, content);
 }
 
-async function askSavePath(st) {
+async function askSavePath(st, name) {
+  const given = typeof name === 'string' && /\.[a-z0-9]+$/i.test(name) ? name : 'Untitled.md';
   const r = await dialog.showSaveDialog(st.win, {
-    defaultPath: st.filePath || 'Untitled.md',
-    filters: MD_FILTERS,
+    defaultPath: st.filePath || given,
+    filters: saveFilters(st.filePath || given),
   });
   return r.canceled ? null : r.filePath;
 }
 
 async function openDialog() {
   const parent = BrowserWindow.getFocusedWindow() || undefined;
-  const r = await dialog.showOpenDialog(parent, { properties: ['openFile', 'multiSelections'], filters: MD_FILTERS });
+  const r = await dialog.showOpenDialog(parent, { properties: ['openFile', 'multiSelections'], filters: ALL_FILTERS });
   if (!r.canceled) r.filePaths.forEach(openFile);
 }
 
@@ -236,14 +272,14 @@ async function readDoc(st, p) {
 }
 
 ipcMain.handle('file:read', (e, p) => readDoc(stateOf(e), p));
-ipcMain.handle('file:save', async (e, content) => {
+ipcMain.handle('file:save', async (e, content, name) => {
   const st = stateOf(e);
-  const target = st.filePath || (await askSavePath(st));
+  const target = st.filePath || (await askSavePath(st, name));
   return target ? saveTo(st, target, content) : null;
 });
-ipcMain.handle('file:save-as', async (e, content) => {
+ipcMain.handle('file:save-as', async (e, content, name) => {
   const st = stateOf(e);
-  const target = await askSavePath(st);
+  const target = await askSavePath(st, name);
   return target ? saveTo(st, target, content) : null;
 });
 ipcMain.handle('doc:confirm-discard', async (e) => {
@@ -540,12 +576,12 @@ async function askExportPath(st, ext, label) {
 
 const baseDirOf = (st) => (st.filePath ? path.dirname(st.filePath) : undefined);
 
-ipcMain.handle('export:pdf', async (e, { html }) => {
+ipcMain.handle('export:pdf', async (e, { html, raw }) => {
   const st = stateOf(e);
   const target = await askExportPath(st, 'pdf', 'PDF');
   if (!target) return null;
   try {
-    await fs.promises.writeFile(target, await Exporter.htmlToPdf(String(html || ''), { baseDir: baseDirOf(st) }));
+    await fs.promises.writeFile(target, await Exporter.htmlToPdf(String(html || ''), { baseDir: baseDirOf(st), raw: !!raw }));
     return { path: target };
   } catch (err) {
     return { error: err.message };
@@ -675,7 +711,7 @@ app.whenReady().then(() => {
   nativeTheme.themeSource = themePref === 'auto' ? 'system' : themePref;
   buildMenu();
   watchGanttStorage();
-  const args = process.argv.slice(app.isPackaged ? 1 : 2).filter((a) => NOTE_RE.test(a)).map((a) => path.resolve(a));
+  const args = process.argv.slice(app.isPackaged ? 1 : 2).filter((a) => DOC_RE.test(a)).map((a) => path.resolve(a));
   const first = [...pendingOpens, ...args];
   pendingOpens = [];
   if (first.length) first.forEach(openFile);

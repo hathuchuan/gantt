@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: file: https:; script-src 'self'" />
+        content="default-src 'self'; style-src 'self' 'unsafe-inline' file:; img-src 'self' data: file: https:; script-src 'self'" />
   <title>Untitled</title>
   <link rel="stylesheet" href="vendor/katex.min.css" />
   <link rel="stylesheet" href="style.css" />
@@ -12,7 +12,7 @@
   <script src="theme-init.js"></script>
 </head>
 <body>
-  <div id="titlebar"><span id="docname">Untitled</span></div>
+  <div id="titlebar"><span id="docname">Untitled</span><button id="docstatus" hidden></button></div>
 
   <button id="toggle" title="Preview (⌘/)" aria-label="Toggle preview">
     <svg class="i-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
@@ -20,6 +20,7 @@
   </button>
 
   <div id="hl" aria-hidden="true"></div>
+  <div id="lint" aria-hidden="true"></div>
   <textarea id="editor" spellcheck="false" autocapitalize="off" placeholder="Start writing…  Type / for commands"></textarea>
   <article id="preview" hidden></article>
   <ul id="slash" role="listbox" hidden></ul>
@@ -49,6 +50,12 @@
       <div id="sheet-body"></div>
     </div>
   </div>
+  <div id="fmtbar" role="toolbar" aria-label="Text formatting" hidden></div>
+  <div id="fmtpop" hidden></div>
+  <div id="problems" hidden>
+    <header><strong id="pb-title"></strong><button id="pb-close" aria-label="Hide problems">✕</button></header>
+    <ul id="pb-list"></ul>
+  </div>
   <div id="toast" hidden></div>
 
   <script src="vendor/marked.umd.js"></script>
@@ -59,6 +66,7 @@
   <script src="vendor/turndown-plugin-gfm.js"></script>
   <script src="html2md.js"></script>
   <script src="math.js"></script>
+  <script src="formats.js"></script>
   <script src="editing.js"></script>
   <script src="notes-core.js"></script>
   <script src="app.js"></script>
