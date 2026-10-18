@@ -207,3 +207,109 @@ test('every ready-made JSON command produces valid JSON where it should', () => 
     assert.ok(F.jsonCheck(json).ok, key + ': ' + json);
   }
 });
+
+const msgs = (html) => F.lintHtml(html).map((p) => p.severity[0] + ':' + p.message);
+
+test('HTML lint: a clean page has no problems', () => {
+  assert.deepStrictEqual(F.lintHtml(F.htmlTemplate({ cursor: false })), []);
+  assert.deepStrictEqual(F.lintHtml('<ul><li>a<li>b</ul><table><tr><td>1<td>2</table><p>x<p>y'), []); // optional end tags
+  assert.deepStrictEqual(F.lintHtml('<svg><path d="M0"/></svg><br><img src="a" alt="x"><!-- <b> -->'), []);
+  assert.deepStrictEqual(F.lintHtml('<script>if (a < b && c > d) { x = "</p>" }</script>'), []);
+  assert.deepStrictEqual(F.lintHtml(''), []);
+});
+
+test('HTML lint: tags that are not closed, or closed wrongly', () => {
+  assert.deepStrictEqual(msgs('<div><span>hi</div>'), ['e:<span> is not closed before </div> — add </span>']);
+  assert.deepStrictEqual(msgs('<div>hi'), ['e:<div> is never closed — add </div>']);
+  assert.deepStrictEqual(msgs('<div></span></div>'), ['e:Unexpected </span> — there is no open <span> to close']);
+  assert.deepStrictEqual(msgs('<b><i>x</b></i>').length, 2);
+  const [p] = F.lintHtml('a\n<div><span>x</div>');
+  assert.deepStrictEqual([p.line, p.col, p.len], [2, 6, 5]); // points at <span
+});
+
+test('HTML lint: broken tags, quotes, comments', () => {
+  assert.match(msgs('<div <p>hi</p>')[0], /<div … is not finished/);
+  assert.match(msgs('<a href="x>link</a>')[0], /quote after href= never closes|runs into another tag/);
+  assert.match(msgs('<div class="a>text</div> <b class="y">z</b>')[1], /runs into another tag/);
+  assert.match(msgs('<p id=>x</p>')[0], /has no value/);
+  assert.match(msgs('<!-- never closed <p>x')[0], /comment never closes/);
+  assert.match(msgs('<p>a</>')[0], /closing tag needs a name/);
+  assert.match(msgs('<p>x <3 y</p>')[0], /^w:A lone “<”/);
+  assert.match(msgs('<p>x</p ')[0], /not finished/);
+});
+
+test('HTML lint: warnings for things that work but are probably mistakes', () => {
+  assert.deepStrictEqual(msgs('<img src="a.png">'), ['w:Add alt="…" to the image — it is read aloud and shown when the picture is missing']);
+  assert.match(msgs('<p class="a" class="b">x</p>')[0], /^w:“class” is written twice/);
+  assert.match(msgs('<p id="a">x</p><p id="a">y</p>')[0], /^w:id “a” is used more than once/);
+  assert.match(msgs('<a href="x"id="y">z</a>')[0], /^w:Put a space/);
+  assert.match(msgs('<br></br>')[0], /^w:<br> never has a closing tag/);
+  assert.match(msgs('<html><body></body></html>')[0], /^w:Add <!doctype html>/);
+  assert.match(msgs('<div/>')[0], /^w:In HTML <div \/> does not close itself/);
+});
+
+test('HTML lint: braces in <style> are checked', () => {
+  assert.deepStrictEqual(msgs('<style>a { color: red; }</style>'), []);
+  assert.deepStrictEqual(msgs('<style>a { content: "}"; } /* } */</style>'), []);
+  assert.match(msgs('<style>a { color: red;</style><p>ok</p>')[0], /“\{” in the CSS is never closed/);
+  assert.match(msgs('<style>a { } }</style>')[0], /Extra “\}” in the CSS/);
+  const [p] = F.lintHtml('<style>\na {\n</style>');
+  assert.strictEqual(p.line, 2);
+});
+
+test('lint() covers JSON too, and nothing for Markdown', () => {
+  assert.deepStrictEqual(F.lint('json', '{"a": 1}'), []);
+  assert.deepStrictEqual(F.lint('json', ''), []);
+  const [p] = F.lint('json', '{"a": 1,}');
+  assert.deepStrictEqual([p.severity, p.line, p.col, p.len], ['error', 1, 9, 1]);
+  assert.deepStrictEqual(F.lint('md', '<div>'), []);
+});
+
+test('text style: colour, background, size through one span', () => {
+  const v = 'say hello now';
+  assert.strictEqual(run(v, F.htmlStyle(v, 4, 9, 'color', '#e03131')), 'say <span style="color: #e03131">|hello|</span> now');
+  const w = 'say <span style="color: #e03131">hello</span> now';
+  const h0 = w.indexOf('hello');
+  assert.strictEqual(run(w, F.htmlStyle(w, h0, h0 + 5, 'color', '#1c7ed6')), 'say <span style="color: #1c7ed6">|hello|</span> now'); // inside the span: edited, not nested
+  assert.strictEqual(run(w, F.htmlStyle(w, 4, w.indexOf(' now'), 'font-size', '1.5em')), 'say <span style="color: #e03131; font-size: 1.5em">|hello|</span> now'); // whole span selected
+  assert.strictEqual(run(w, F.htmlStyle(w, h0, h0 + 5, 'color', '')), 'say |hello| now'); // last property removed: the span goes
+  assert.strictEqual(F.htmlStyle(v, 4, 9, 'color', ''), null);
+  assert.strictEqual(run('x', F.htmlStyle('x', 1, 1, 'color', 'red')), 'x<span style="color: red">|</span>');
+  const two = '<span style="color: red">a</span> <span style="color: blue">b</span>';
+  assert.strictEqual(run(two, F.htmlStyle(two, 0, two.length, 'font-size', '2em')), '<span style="font-size: 2em">|' + two + '|</span>'); // not one span: wrap
+  assert.strictEqual(F.cssSet('color: red; font-size: 2em', 'color', ''), 'font-size: 2em');
+});
+
+test('alignment edits the block tag or wraps the lines', () => {
+  assert.strictEqual(run('<p>Hi</p>', F.htmlAlign('<p>Hi</p>', 4, 4, 'center')).replace('|', ''), '<p style="text-align: center">Hi</p>');
+  const c = '  <h2 style="color: red; text-align: right">Hi</h2>';
+  assert.strictEqual(run(c, F.htmlAlign(c, 30, 30, 'center')).replace('|', ''), '  <h2 style="color: red; text-align: center">Hi</h2>');
+  assert.strictEqual(run(c, F.htmlAlign(c, 30, 30, 'left')).replace('|', ''), '  <h2 style="color: red">Hi</h2>');
+  assert.strictEqual(F.htmlAlign('plain', 0, 0, 'left'), null);
+  assert.strictEqual(run('  plain\n  two', F.htmlAlign('  plain\n  two', 3, 11, 'right')), '  <div style="text-align: right">\n    plain\n    two\n  </div>|');
+});
+
+test('lists and quotes from the selected lines', () => {
+  const v = 'a\nb\n\nc';
+  assert.strictEqual(run(v, F.htmlList(v, 0, v.length, 'ul')), '<ul>\n  <li>a</li>\n  <li>b</li>\n  <li>c</li>\n</ul>|');
+  assert.strictEqual(run('  x', F.htmlList('  x', 2, 3, 'ol')), '  <ol>\n    <li>x</li>\n  </ol>|');
+  assert.strictEqual(run('', F.htmlList('', 0, 0, 'ul')), '<ul>\n  <li>|</li>\n</ul>');
+  assert.strictEqual(run('one', F.htmlList('one', 0, 3, 'blockquote')), '<blockquote>\n  one\n</blockquote>|');
+});
+
+test('remove formatting strips format tags but keeps the text', () => {
+  const v = 'a <strong><em>word</em></strong> b';
+  assert.strictEqual(run(v, F.htmlClear(v, v.indexOf('word'), v.indexOf('word') + 4)), 'a |word| b');
+  const w = 'a <span style="color: red">x <b>y</b></span> b';
+  assert.strictEqual(run(w, F.htmlClear(w, 2, w.indexOf(' b'))), 'a |x y| b');
+  assert.strictEqual(F.htmlClear('plain text', 0, 5), null);
+  assert.strictEqual(F.htmlClear('x', 0, 0), null);
+  const link = 'see <a href="x">here</a>';
+  assert.strictEqual(F.htmlClear(link, 4, link.length), null); // links are not "formatting"
+});
+
+test('formatting slash commands exist for web pages', () => {
+  const keys = F.HTML_ITEMS.map((i) => i.key);
+  for (const k of ['bold', 'italic', 'strike', 'underline', 'bolditalic', 'red', 'blue', 'yellowmark', 'big', 'huge', 'aligncenter', 'alignright', 'justify']) assert.ok(keys.includes(k), k);
+  assert.strictEqual(new Set(F.ITEMS.map((i) => i.id)).size, F.ITEMS.length); // no duplicate ids
+});

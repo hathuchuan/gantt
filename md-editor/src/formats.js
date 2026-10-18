@@ -267,6 +267,8 @@ ${styleBlock('  ')}
     H('Text', 'p', 'Paragraph', '¶', '<p>{cursor}</p>', BLOCK),
     H('Text', 'bold', 'Bold', 'B', '<strong>{cursor}</strong>'),
     H('Text', 'italic', 'Italic', 'I', '<em>{cursor}</em>'),
+    H('Text', 'bolditalic', 'Bold italic', 'BI', '<strong><em>{cursor}</em></strong>'),
+    H('Text', 'strike', 'Strikethrough', 'S̶', '<s>{cursor}</s>'),
     H('Text', 'underline', 'Underline', 'U', '<u>{cursor}</u>'),
     H('Text', 'highlight', 'Highlight', '▮', '<mark>{cursor}</mark>'),
     H('Text', 'small', 'Small text', 'a', '<small>{cursor}</small>'),
@@ -274,6 +276,17 @@ ${styleBlock('  ')}
     H('Text', 'subscript', 'Subscript', 'x₂', '<sub>{cursor}</sub>'),
     H('Text', 'inlinecode', 'Inline code', '`', '<code>{cursor}</code>'),
     H('Text', 'color', 'Coloured text', '🖍', '<span style="color: #e03131">{cursor}</span>'),
+    ...[
+      ['red', 'Red text', '#e03131'], ['orange', 'Orange text', '#f76707'], ['green', 'Green text', '#2f9e44'],
+      ['blue', 'Blue text', '#1c7ed6'], ['purple', 'Purple text', '#7048e8'], ['gray', 'Gray text', '#868e96'],
+    ].map(([key, label, c]) => H('Text', key, label, 'A', `<span style="color: ${c}">{cursor}</span>`)),
+    H('Text', 'yellowmark', 'Yellow highlighter', '▮', '<span style="background-color: #fff3bf">{cursor}</span>'),
+    H('Text', 'big', 'Larger text', 'A+', '<span style="font-size: 1.5em">{cursor}</span>'),
+    H('Text', 'huge', 'Huge text', 'A++', '<span style="font-size: 2.2em">{cursor}</span>'),
+    H('Text', 'alignleft', 'Align left', '⇤', '<div style="text-align: left">\n  {cursor}\n</div>', BLOCK),
+    H('Text', 'aligncenter', 'Align center', '≡', '<div style="text-align: center">\n  {cursor}\n</div>', BLOCK),
+    H('Text', 'alignright', 'Align right', '⇥', '<div style="text-align: right">\n  {cursor}\n</div>', BLOCK),
+    H('Text', 'justify', 'Justify', '☰', '<div style="text-align: justify">\n  {cursor}\n</div>', BLOCK),
     H('Text', 'linebreak', 'Line break', '↵', '<br>\n'),
     H('Text', 'link', 'Link', '🔗', T.link, { select: sel(T.link, 'https://') }),
     H('Text', 'button', 'Button (link styled as button)', '▭', T.button, { select: sel(T.button, 'Nút bấm') }),
@@ -444,11 +457,312 @@ ${styleBlock('  ')}
   const htmlImage = (rel, alt = '') => `<img src="${encPath(rel)}" alt="${escAttr(alt)}">`;
   const htmlFileLink = (p, text) => `<a href="file://${encPath(p)}">${escText(text || String(p).split('/').pop())}</a>`;
 
+  // ---------- finding mistakes (syntax checking) ----------
+  // Every problem: { pos, len, line, col, message, severity: 'error' | 'warning' }, sorted by position.
+  const OPTIONAL_END = new Set(['html', 'head', 'body', 'p', 'li', 'dt', 'dd', 'tr', 'td', 'th', 'thead', 'tbody', 'tfoot', 'caption', 'colgroup', 'option', 'optgroup', 'rt', 'rp']);
+  const RAW_TEXT = new Set(['script', 'style', 'textarea', 'title']);
+  const MAX_PROBLEMS = 100;
+
+  // CSS inside <style>: only the braces are checked (a missing } silently breaks everything after it).
+  function lintCss(css, base, add) {
+    const open = [];
+    for (let i = 0; i < css.length; i++) {
+      const c = css[i];
+      if (c === '/' && css[i + 1] === '*') {
+        const end = css.indexOf('*/', i + 2);
+        if (end === -1) return void add(base + i, 2, 'This CSS comment never closes — add */');
+        i = end + 1;
+      } else if (c === '"' || c === "'") {
+        let j = i + 1;
+        while (j < css.length && css[j] !== c && css[j] !== '\n') j += css[j] === '\\' ? 2 : 1;
+        if (css[j] !== c) return void add(base + i, 1, 'This CSS text in quotes never closes');
+        i = j;
+      } else if (c === '{') open.push(i);
+      else if (c === '}') {
+        if (!open.length) add(base + i, 1, 'Extra “}” in the CSS — there is no “{” for it');
+        else open.pop();
+      }
+    }
+    for (const i of open) add(base + i, 1, 'This “{” in the CSS is never closed — add “}”');
+  }
+
+  function lintHtml(text) {
+    const problems = [];
+    const add = (pos, len, message, severity = 'error') => {
+      if (problems.length < MAX_PROBLEMS) problems.push({ pos, len, message, severity });
+    };
+    const n = text.length;
+    const stack = [];
+    const ids = new Map();
+    let i = 0;
+    const hasRoot = /<(?:html|head|body)[\s>]/i.test(text);
+    if (hasRoot && !/^\s*<!doctype\s/i.test(text)) add(0, 1, 'Add <!doctype html> as the very first line so browsers use the modern rules', 'warning');
+
+    scan: while (i < n) {
+      const lt = text.indexOf('<', i);
+      if (lt === -1) break;
+      i = lt;
+      if (text.startsWith('<!--', i)) {
+        const end = text.indexOf('-->', i + 4);
+        if (end === -1) {
+          add(i, 4, 'This comment never closes — add -->');
+          break;
+        }
+        i = end + 3;
+        continue;
+      }
+      if (text.startsWith('<![CDATA[', i)) {
+        const end = text.indexOf(']]>', i);
+        i = end === -1 ? n : end + 3;
+        continue;
+      }
+      if (text[i + 1] === '!' || text[i + 1] === '?') {
+        const end = text.indexOf('>', i);
+        if (end === -1) {
+          add(i, 2, 'This declaration never ends — it is missing >');
+          break;
+        }
+        i = end + 1;
+        continue;
+      }
+      const closing = text[i + 1] === '/';
+      const head = /^<\/?([a-zA-Z][a-zA-Z0-9:-]*)/.exec(text.slice(i, i + 80));
+      if (!head) {
+        if (closing) add(i, 2, 'A closing tag needs a name, like </div>');
+        else add(i, 1, 'A lone “<” — write &lt; when you mean the symbol', 'warning');
+        i += closing ? 2 : 1;
+        continue;
+      }
+      const name = head[1].toLowerCase();
+      const tagLen = head[0].length;
+      let j = i + tagLen;
+      let selfClose = false;
+      let ended = false;
+      const attrs = new Set();
+      while (j < n) {
+        while (j < n && /\s/.test(text[j])) j++;
+        const c = text[j];
+        if (c === undefined || c === '<') break;
+        if (c === '>') {
+          ended = true;
+          j++;
+          break;
+        }
+        if (c === '/') {
+          if (text[j + 1] === '>') {
+            selfClose = true;
+            ended = true;
+            j += 2;
+            break;
+          }
+          j++;
+          continue;
+        }
+        const am = /^[^\s"'<>/=]+/.exec(text.slice(j, j + 200));
+        if (!am) {
+          add(j, 1, `Unexpected “${c}” inside <${name}> — a quote or = is out of place`);
+          j++;
+          continue;
+        }
+        const aname = am[0].toLowerCase();
+        const aPos = j;
+        j += am[0].length;
+        if (!closing) {
+          if (attrs.has(aname)) add(aPos, am[0].length, `“${aname}” is written twice on <${name}> — the second one is ignored`, 'warning');
+          attrs.add(aname);
+        }
+        let k = j;
+        while (k < n && /\s/.test(text[k])) k++;
+        if (text[k] !== '=') continue;
+        k++;
+        while (k < n && /\s/.test(text[k])) k++;
+        const q = text[k];
+        let value = '';
+        if (q === '"' || q === "'") {
+          const end = text.indexOf(q, k + 1);
+          if (end === -1) {
+            add(k, 1, `The quote after ${aname}= never closes — add a closing ${q}`);
+            break scan;
+          }
+          value = text.slice(k + 1, end);
+          if (/<\/?[a-zA-Z]/.test(value)) add(k, 1, `This ${aname}="…" runs into another tag — a closing ${q} is probably missing`);
+          j = end + 1;
+          if (text[j] !== undefined && !/[\s/>]/.test(text[j])) add(j, 1, 'Put a space between attributes', 'warning');
+        } else {
+          const um = /^[^\s"'=<>`]+/.exec(text.slice(k, k + 300));
+          if (!um) {
+            add(j, k - j + 1, `${aname}= has no value — write ${aname}="…"`);
+            j = k;
+            continue;
+          }
+          value = um[0];
+          j = k + value.length;
+        }
+        if (aname === 'id' && !closing) {
+          if (ids.has(value)) add(aPos, am[0].length, `id “${value}” is used more than once — each id must be unique`, 'warning');
+          else ids.set(value, aPos);
+        }
+      }
+      if (!ended) {
+        add(i, tagLen, `<${name} … is not finished — it is missing its closing >`);
+        i = j < n && text[j] === '<' ? j : n;
+        continue;
+      }
+      const at = i;
+      i = j;
+      if (closing) {
+        if (VOID.has(name)) {
+          add(at, i - at, `<${name}> never has a closing tag — delete this`, 'warning');
+          continue;
+        }
+        let idx = -1;
+        for (let k = stack.length - 1; k >= 0; k--) {
+          if (stack[k].name === name) {
+            idx = k;
+            break;
+          }
+        }
+        if (idx === -1) {
+          add(at, i - at, `Unexpected </${name}> — there is no open <${name}> to close`);
+          continue;
+        }
+        for (let k = stack.length - 1; k > idx; k--) {
+          const o = stack[k];
+          if (!OPTIONAL_END.has(o.name)) add(o.pos, o.len, `<${o.name}> is not closed before </${name}> — add </${o.name}>`);
+        }
+        stack.length = idx;
+        continue;
+      }
+      if (name === 'img' && !attrs.has('alt')) add(at, tagLen, 'Add alt="…" to the image — it is read aloud and shown when the picture is missing', 'warning');
+      if (VOID.has(name)) continue;
+      const foreign = name === 'svg' || name === 'math' || stack.some((o) => o.name === 'svg' || o.name === 'math');
+      if (selfClose) {
+        if (foreign) continue;
+        add(at, i - at, `In HTML <${name} /> does not close itself — write <${name}></${name}>`, 'warning');
+      }
+      stack.push({ name, pos: at, len: tagLen });
+      if (RAW_TEXT.has(name) && !selfClose) {
+        const m = new RegExp('</' + name + '(?=[\\s/>])', 'i').exec(text.slice(i));
+        if (!m) {
+          add(at, tagLen, `<${name}> is never closed — add </${name}>`);
+          break;
+        }
+        if (name === 'style') lintCss(text.slice(i, i + m.index), i, add);
+        i += m.index;
+      }
+    }
+    for (let k = stack.length - 1; k >= 0; k--) {
+      const o = stack[k];
+      if (!OPTIONAL_END.has(o.name)) add(o.pos, o.len, `<${o.name}> is never closed — add </${o.name}>`);
+    }
+    return problems.sort((a, b) => a.pos - b.pos).map((p) => ({ ...p, ...lineCol(text, p.pos) }));
+  }
+
+  function lint(kind, text) {
+    if (kind === 'html') return lintHtml(text);
+    if (kind !== 'json') return [];
+    const r = jsonCheck(text);
+    return r.ok || r.empty ? [] : [{ pos: r.pos, len: 1, line: r.line, col: r.col, message: r.message, severity: 'error' }];
+  }
+
+  // ---------- HTML text formatting on the selection ----------
+  const cssParse = (css) =>
+    css.split(';').map((x) => x.trim()).filter(Boolean).map((x) => [x.slice(0, x.indexOf(':')).trim().toLowerCase(), x.slice(x.indexOf(':') + 1).trim()]);
+  // Set one CSS property in a style="" text (value null/'' removes it).
+  const cssSet = (css, prop, value) =>
+    cssParse(css).filter(([k]) => k !== prop).concat(value ? [[prop, value]] : []).map(([k, x]) => `${k}: ${x}`).join('; ');
+  // True when every <span> inside `inner` is closed inside it (and no </span> closes one from outside).
+  function spanBalanced(inner) {
+    let depth = 0;
+    for (const m of inner.matchAll(/<span[\s>]|<\/span>/g)) {
+      depth += m[0][1] === '/' ? -1 : 1;
+      if (depth < 0) return false;
+    }
+    return depth === 0;
+  }
+
+  // Colour, background, size… of the selected text through <span style="…">. Formatting the same text again edits
+  // that span instead of nesting a new one; removing the last property removes the span.
+  function htmlStyle(v, s, e, prop, value) {
+    const text = v.slice(s, e);
+    const rebuild = (from, to, css, inner) => {
+      if (!css) return edit(from, to, inner, from, from + inner.length);
+      const open = `<span style="${css}">`;
+      return edit(from, to, open + inner + '</span>', from + open.length, from + open.length + inner.length);
+    };
+    const whole = /^<span style="([^"]*)">([\s\S]*)<\/span>$/.exec(text);
+    if (whole && spanBalanced(whole[2])) return rebuild(s, e, cssSet(whole[1], prop, value), whole[2]);
+    const around = /<span style="([^"]*)">$/.exec(v.slice(0, s));
+    if (around && v.slice(e, e + 7) === '</span>' && spanBalanced(text)) {
+      return rebuild(s - around[0].length, e + 7, cssSet(around[1], prop, value), text);
+    }
+    if (!value) return null;
+    return rebuild(s, e, `${prop}: ${value}`, text);
+  }
+
+  const BLOCK_TAG = /^(\s*)<(p|h[1-6]|div|li|td|th|blockquote|section|header|footer|figure|nav|article|main|ul|ol|table)\b([^>]*)>/i;
+  // Text alignment of the line(s) holding the selection: edits the style of the block tag that starts the line,
+  // or wraps the lines in a <div> when there is none.
+  function htmlAlign(v, s, e, value) {
+    const ls = lineStart(v, s);
+    const le = lineEnd(v, e > s && v[e - 1] === '\n' ? e - 1 : e);
+    const block = v.slice(ls, le);
+    const m = BLOCK_TAG.exec(block);
+    if (m) {
+      const sm = /\sstyle="([^"]*)"/.exec(m[3]);
+      const css = cssSet(sm ? sm[1] : '', 'text-align', value === 'left' ? '' : value);
+      const attrs = sm ? m[3].replace(sm[0], css ? ` style="${css}"` : '') : css ? `${m[3]} style="${css}"` : m[3];
+      const text = `${m[1]}<${m[2]}${attrs}>` + block.slice(m[0].length);
+      const d = text.length - block.length;
+      return edit(ls, le, text, Math.max(ls, s + d), Math.max(ls, e + d));
+    }
+    if (value === 'left') return null;
+    const indent = /^\s*/.exec(block)[0];
+    const inner = block.split('\n').map((l) => (l ? '  ' + l : l)).join('\n');
+    const text = `${indent}<div style="text-align: ${value}">\n${inner}\n${indent}</div>`;
+    return edit(ls, le, text, ls + text.length);
+  }
+
+  // The selected lines become the items of a list (tag 'ul' or 'ol') or a quote ('blockquote').
+  function htmlList(v, s, e, tag) {
+    const ls = lineStart(v, s);
+    const le = lineEnd(v, e > s && v[e - 1] === '\n' ? e - 1 : e);
+    const lines = v.slice(ls, le).split('\n').filter((l) => l.trim());
+    const indent = /^\s*/.exec(v.slice(ls, le))[0];
+    if (tag === 'blockquote') {
+      const text = `${indent}<blockquote>\n${(lines.length ? lines : ['']).map((l) => `${indent}  ${l.trim()}`).join('\n')}\n${indent}</blockquote>`;
+      return edit(ls, le, text, lines.length ? ls + text.length : ls + indent.length + 14 + indent.length + 2);
+    }
+    const items = (lines.length ? lines : ['']).map((l) => `${indent}  <li>${l.trim()}</li>`);
+    const text = `${indent}<${tag}>\n${items.join('\n')}\n${indent}</${tag}>`;
+    return edit(ls, le, text, lines.length ? ls + text.length : ls + indent.length + tag.length + 2 + 1 + indent.length + 6);
+  }
+
+  const INLINE_FORMAT = new Set(['strong', 'b', 'em', 'i', 'u', 's', 'del', 'ins', 'mark', 'small', 'sub', 'sup', 'span', 'code', 'font']);
+  const INLINE_STRIP = new RegExp('</?(?:' + [...INLINE_FORMAT].join('|') + ')(?:\\s[^<>]*)?>', 'gi');
+  // Remove bold / italic / colour… from the selection (and from the tags wrapped right around it).
+  function htmlClear(v, s, e) {
+    if (s === e) return null;
+    let a = s;
+    let b = e;
+    for (let k = 0; k < 8; k++) {
+      const om = /<([a-zA-Z][\w-]*)(?:\s[^<>]*)?>$/.exec(v.slice(0, a));
+      if (!om || !INLINE_FORMAT.has(om[1].toLowerCase())) break;
+      const close = `</${om[1]}>`;
+      if (v.slice(b, b + close.length).toLowerCase() !== close.toLowerCase()) break;
+      a -= om[0].length;
+      b += close.length;
+    }
+    const text = v.slice(a, b).replace(INLINE_STRIP, '');
+    return text === v.slice(s, e) && a === s ? null : edit(a, b, text, a, a + text.length);
+  }
+
   return {
     KINDS, EXT, kindOf, templateFor, ITEMS, HTML_ITEMS, JSON_ITEMS, CSS_RULES, VOID,
     jsonCheck, jsonFormat, jsonMinify, jsonSortKeys, lineCol,
     htmlTemplate, indentBy,
     onEnterCode, autoPairCode, onBackspaceCode,
     htmlWrap, htmlLink, htmlHeading, htmlImage, htmlFileLink,
+    lint, lintHtml, htmlStyle, htmlAlign, htmlList, htmlClear, cssSet,
   };
 });

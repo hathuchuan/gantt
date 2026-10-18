@@ -20,6 +20,7 @@
   </button>
 
   <div id="hl" aria-hidden="true"></div>
+  <div id="lint" aria-hidden="true"></div>
   <textarea id="editor" spellcheck="false" autocapitalize="off" placeholder="Start writing…  Type / for commands"></textarea>
   <article id="preview" hidden></article>
   <ul id="slash" role="listbox" hidden></ul>
@@ -48,6 +49,12 @@
       <header><h2 id="sheet-title"></h2><button id="sheet-close" aria-label="Close">✕</button></header>
       <div id="sheet-body"></div>
     </div>
+  </div>
+  <div id="fmtbar" role="toolbar" aria-label="Text formatting" hidden></div>
+  <div id="fmtpop" hidden></div>
+  <div id="problems" hidden>
+    <header><strong id="pb-title"></strong><button id="pb-close" aria-label="Hide problems">✕</button></header>
+    <ul id="pb-list"></ul>
   </div>
   <div id="toast" hidden></div>
 

@@ -34,21 +34,25 @@
   const isDirty = () => editor.value !== saved;
 
   // ---------- editing ----------
+  let applying = false; // the input event of our own edit is handled once, after the selection is restored
   function applyEdit(ed) {
     editor.focus();
     editor.setSelectionRange(ed.from, ed.to);
+    applying = true;
     if (ed.text === '') {
       if (ed.from !== ed.to && !document.execCommand('delete')) editor.setRangeText('', ed.from, ed.to, 'end');
     } else if (!document.execCommand('insertText', false, ed.text)) {
       editor.setRangeText(ed.text, ed.from, ed.to, 'end');
     }
+    applying = false;
     editor.setSelectionRange(ed.selStart, ed.selEnd);
     onInput();
   }
 
   function onInput() {
     updateState();
-    updateStatus();
+    updateLint();
+    updateFmtBar();
     updateSlash();
     fire('input');
   }
@@ -60,7 +64,7 @@
     api.setState({ dirty, name });
   }
 
-  editor.addEventListener('input', onInput);
+  editor.addEventListener('input', () => !applying && onInput());
   editor.addEventListener('click', (e) => {
     hideSlash();
     // ⌘-click a link in the source to open it.
@@ -167,20 +171,33 @@
     applyEdit({ from: s, to: editor.selectionEnd, text: md, selStart: s + md.length, selEnd: s + md.length });
   }
 
-  function format(action) {
+  // `spec` is a command ("bold") or a command with its value ("color:#e03131", "align:center"; "color:" removes it).
+  function format(spec) {
+    const cut = spec.indexOf(':');
+    const action = cut < 0 ? spec : spec.slice(0, cut);
+    const arg = cut < 0 ? '' : spec.slice(cut + 1);
     const { value: v, selectionStart: s, selectionEnd: e } = editor;
+    if (kind === 'json') return;
+    if (action === 'color-menu' || action === 'bg-menu') return openFmtPop(action === 'color-menu' ? 'color' : 'bg');
+    const tags = { bold: 'strong', italic: 'em', strike: 's', underline: 'u', highlight: 'mark', sub: 'sub', sup: 'sup', small: 'small', code: 'code' };
+    const css = { color: 'color', bg: 'background-color', size: 'font-size' };
     const marks = { bold: '**', italic: '*', strike: '~~', code: '`' };
     let ed;
     if (kind === 'html') {
-      const tags = { bold: 'strong', italic: 'em', strike: 's', code: 'code' };
       if (action in tags) ed = F.htmlWrap(v, s, e, tags[action]);
       else if (action === 'link') ed = F.htmlLink(v, s, e);
       else if (/^h[123]$/.test(action)) ed = F.htmlHeading(v, s, Number(action[1]));
-    } else if (kind === 'json') return;
-    else if (action in marks) ed = E.wrap(v, s, e, marks[action]);
+      else if (action in css) ed = F.htmlStyle(v, s, e, css[action], arg);
+      else if (action === 'align') ed = F.htmlAlign(v, s, e, arg);
+      else if (action === 'ul' || action === 'ol') ed = F.htmlList(v, s, e, action);
+      else if (action === 'quote') ed = F.htmlList(v, s, e, 'blockquote');
+      else if (action === 'clear') ed = F.htmlClear(v, s, e);
+    } else if (action in marks) ed = E.wrap(v, s, e, marks[action]);
     else if (action === 'link') ed = E.link(v, s, e);
     else if (/^h[123]$/.test(action)) ed = E.heading(v, s, Number(action[1]));
+    else if (['underline', 'highlight', 'sub', 'sup'].includes(action)) ed = F.htmlWrap(v, s, e, tags[action]);
     if (ed) applyEdit(ed);
+    else if (kind === 'html' && ['color', 'bg', 'size', 'align', 'clear'].includes(action) && s === e) toast('Select some text first.');
   }
 
   // ---------- slash menu ----------
@@ -424,6 +441,7 @@
     mode = next;
     document.body.dataset.mode = mode;
     hideSlash();
+    hideFmt();
     if (mode === 'preview') {
       renderPreview();
       preview.hidden = false;
@@ -437,6 +455,7 @@
     const dst = mode === 'preview' ? preview : editor;
     dst.scrollTop = ratio * (dst.scrollHeight - dst.clientHeight);
     $('toggle').title = mode === 'edit' ? 'Preview (⌘/)' : 'Edit (⌘/)';
+    renderLint();
     fire('mode');
   }
 
@@ -971,32 +990,220 @@
 
   // ---------- kinds of file: web page and JSON ----------
   const statusEl = $('docstatus');
-  let statusTimer = 0;
-  let jsonError = null;
+  const lintEl = $('lint');
+  const problemsBox = $('problems');
+  let lintTimer = 0;
+  let problems = [];
+  let panelClosed = false;
+  let nextProblem = -1;
 
   function setKind(next) {
     kind = next;
     document.body.dataset.kind = kind;
-    updateStatus(true);
+    panelClosed = false;
+    hideFmt();
+    updateLint(true);
   }
 
-  // JSON files show a small verdict next to the file name: ✓ valid, or ✗ and the line of the first mistake.
-  function updateStatus(now) {
-    clearTimeout(statusTimer);
-    if (kind !== 'json') return void (statusEl.hidden = true);
+  // Mistakes in the web page / JSON are found while typing (a moment after the last key): wavy underline in the
+  // text, a list at the bottom, and a badge by the file name.
+  function updateLint(now) {
+    clearTimeout(lintTimer);
+    if (kind === 'md') {
+      problems = [];
+      return renderLint();
+    }
     const run = () => {
-      const r = F.jsonCheck(editor.value);
-      jsonError = r.ok || r.empty ? null : r;
-      statusEl.hidden = !!r.empty;
-      statusEl.className = r.ok ? 'ok' : 'bad';
-      statusEl.textContent = r.ok ? '✓ JSON' : `✗ line ${r.line}`;
-      statusEl.title = r.ok ? 'Valid JSON' : r.message + ' — click to go there';
+      problems = F.lint(kind, editor.value);
+      nextProblem = -1;
+      renderLint();
     };
     if (now) run();
-    else statusTimer = setTimeout(run, 200);
+    else lintTimer = setTimeout(run, 400);
   }
 
-  statusEl.addEventListener('click', () => jsonError && jumpTo({ line: jsonError.line, col: jsonError.col - 1, len: 1 }));
+  const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+  function renderLint() {
+    const errors = problems.filter((p) => p.severity === 'error').length;
+    const warnings = problems.length - errors;
+    statusEl.hidden = kind === 'md' || !editor.value.trim();
+    statusEl.className = errors ? 'bad' : warnings ? 'warn' : 'ok';
+    statusEl.textContent = errors ? `✗ ${plural(errors, 'error')}` : warnings ? `⚠ ${plural(warnings, 'warning')}` : kind === 'json' ? '✓ JSON' : '✓ HTML';
+    statusEl.title = problems.length ? problems[0].message + ' — click to go to the next problem' : 'No mistakes found';
+    const show = kind !== 'md' && mode === 'edit' && problems.length > 0 && !panelClosed;
+    problemsBox.hidden = !show;
+    document.body.toggleAttribute('data-problems', show);
+    if (show) {
+      $('pb-title').textContent = [errors && plural(errors, 'error'), warnings && plural(warnings, 'warning')].filter(Boolean).join(' · ');
+      $('pb-list').replaceChildren(
+        ...problems.slice(0, 60).map((p) => {
+          const li = el('li', p.severity);
+          li.append(el('span', 'sev', p.severity === 'error' ? '✗' : '⚠'), el('span', 'where', `Line ${p.line}`), el('span', '', p.message));
+          li.addEventListener('mousedown', (ev) => {
+            ev.preventDefault();
+            gotoProblem(p);
+          });
+          return li;
+        })
+      );
+    }
+    paintLint();
+  }
+
+  // The text again, invisible, behind the textarea with every problem underlined (same trick as find).
+  function paintLint() {
+    if (kind === 'md' || mode !== 'edit' || !problems.length) return void (lintEl.textContent = '');
+    const v = editor.value;
+    const esc = (t) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    let html = '';
+    let prev = 0;
+    for (const p of problems) {
+      let from = Math.min(p.pos, Math.max(0, v.length - 1));
+      if (v[from] === '\n' && from > prev) from--;
+      const to = Math.min(v.length, from + Math.max(1, p.len));
+      if (from < prev || to <= from) continue;
+      html += esc(v.slice(prev, from)) + `<mark class="${p.severity}">` + esc(v.slice(from, to)) + '</mark>';
+      prev = to;
+    }
+    lintEl.style.width = editor.clientWidth + 'px';
+    lintEl.innerHTML = html + esc(v.slice(prev)) + '\n';
+    lintEl.scrollTop = editor.scrollTop;
+  }
+
+  function gotoProblem(p) {
+    jumpTo({ line: p.line, col: p.col - 1, len: Math.max(1, p.len) });
+  }
+
+  editor.addEventListener('scroll', () => (lintEl.scrollTop = editor.scrollTop));
+  addEventListener('resize', paintLint);
+  $('pb-close').addEventListener('click', () => {
+    panelClosed = true;
+    renderLint();
+  });
+  statusEl.addEventListener('click', () => {
+    if (panelClosed) {
+      panelClosed = false;
+      renderLint();
+    }
+    if (!problems.length) return;
+    nextProblem = (nextProblem + 1) % problems.length;
+    gotoProblem(problems[nextProblem]);
+  });
+
+  // ---------- text formatting bar (web pages) ----------
+  // Appears over selected text in a .html file: bold, italic, colour, size, alignment… Menu items and shortcuts
+  // (Format menu) do the same through format().
+  const fmtbar = $('fmtbar');
+  const fmtpop = $('fmtpop');
+  const COLORS = ['#e03131', '#f76707', '#f59f00', '#2f9e44', '#1c7ed6', '#7048e8', '#d6336c', '#495057', '#000000', '#ffffff'];
+  const MARKERS = ['#fff3bf', '#ffd8a8', '#d3f9d8', '#d0ebff', '#e5dbff', '#ffdeeb', '#e9ecef'];
+  const BAR = [
+    ['bold', 'B', 'Bold (⌘B)', 'b'], ['italic', 'I', 'Italic (⌘I)', 'i'], ['strike', 'S', 'Strikethrough (⇧⌘X)', 's'], ['underline', 'U', 'Underline (⌘U)', 'u'],
+    null,
+    ['pop:color', 'A', 'Text color'], ['pop:bg', '▮', 'Highlight color'], ['pop:size', 'Aa', 'Text size'], ['pop:align', '≡', 'Alignment'],
+    null,
+    ['link', '🔗', 'Link (⌘K)'], ['code', '</>', 'Code (⌘E)'], ['clear', '⌫', 'Remove formatting'],
+  ];
+  const POPS = {
+    size: [['Small', '0.85em'], ['Normal', ''], ['Large', '1.25em'], ['Larger', '1.6em'], ['Huge', '2.2em']],
+    align: [['Align left', 'left'], ['Center', 'center'], ['Align right', 'right'], ['Justify', 'justify']],
+  };
+  let popKind = '';
+
+  for (const item of BAR) {
+    if (!item) {
+      fmtbar.append(el('span', 'sep'));
+      continue;
+    }
+    const [id, label, title, cls] = item;
+    const b = el('button', cls || '', label);
+    b.title = title;
+    b.addEventListener('click', () => (id.startsWith('pop:') ? togglePop(id.slice(4)) : (hidePop(), format(id))));
+    fmtbar.append(b);
+  }
+  // Clicking the bar must not take the selection away from the text.
+  for (const box of [fmtbar, fmtpop]) box.addEventListener('mousedown', (ev) => ev.target.tagName !== 'INPUT' && ev.preventDefault());
+
+  function hidePop() {
+    fmtpop.hidden = true;
+    popKind = '';
+  }
+
+  function hideFmt() {
+    fmtbar.hidden = true;
+    hidePop();
+  }
+
+  function updateFmtBar() {
+    const ok = kind === 'html' && mode === 'edit' && !isOpen() && sheet.hidden && editor.selectionStart !== editor.selectionEnd;
+    if (!ok) return hideFmt();
+    fmtbar.hidden = false;
+    const { x, y } = caretXY(editor.selectionStart);
+    const lh = parseFloat(getComputedStyle(editor).lineHeight) || 26;
+    const left = Math.max(8, Math.min(x - 8, innerWidth - fmtbar.offsetWidth - 8));
+    const above = y - lh - fmtbar.offsetHeight - 6;
+    fmtbar.style.left = left + 'px';
+    fmtbar.style.top = (above < 48 ? y + 8 : above) + 'px';
+    if (!fmtpop.hidden) placePop();
+  }
+
+  function placePop() {
+    fmtpop.style.left = fmtbar.style.left;
+    fmtpop.style.top = fmtbar.offsetTop + fmtbar.offsetHeight + 4 + 'px';
+  }
+
+  function togglePop(type) {
+    if (popKind === type) return hidePop();
+    popKind = type;
+    const swatches = (list, prop, none) => {
+      const out = list.map((c) => {
+        const b = el('button', 'swatch');
+        b.style.background = c;
+        b.title = c;
+        b.addEventListener('click', () => format(prop + ':' + c));
+        return b;
+      });
+      const reset = el('button', 'opt', none);
+      reset.addEventListener('click', () => (format(prop + ':'), hidePop()));
+      const picker = el('input');
+      picker.type = 'color';
+      picker.title = 'Any color…';
+      picker.addEventListener('input', () => format(prop + ':' + picker.value));
+      return [...out, picker, reset];
+    };
+    if (type === 'color') fmtpop.replaceChildren(...swatches(COLORS, 'color', 'Default color'));
+    else if (type === 'bg') fmtpop.replaceChildren(...swatches(MARKERS, 'bg', 'No highlight'));
+    else {
+      fmtpop.replaceChildren(
+        ...POPS[type].map(([label, value]) => {
+          const b = el('button', 'opt', label);
+          b.addEventListener('click', () => (format(type + ':' + value), hidePop()));
+          return b;
+        })
+      );
+    }
+    fmtpop.hidden = false;
+    placePop();
+  }
+
+  function openFmtPop(type) {
+    if (kind !== 'html') return toast('Colors work in web pages (.html).');
+    if (editor.selectionStart === editor.selectionEnd) return toast('Select some text first.');
+    updateFmtBar();
+    popKind = '';
+    togglePop(type);
+  }
+
+  editor.addEventListener('mouseup', () => setTimeout(updateFmtBar));
+  editor.addEventListener('keyup', updateFmtBar);
+  editor.addEventListener('select', updateFmtBar);
+  editor.addEventListener('scroll', updateFmtBar);
+  editor.addEventListener('blur', () =>
+    setTimeout(() => {
+      if (document.activeElement !== editor && !fmtbar.contains(document.activeElement) && !fmtpop.contains(document.activeElement)) hideFmt();
+    })
+  );
 
   function transformJson(fn, done) {
     if (kind !== 'json') return toast('This command is for JSON files.');
@@ -1109,7 +1316,7 @@
   reloadCommands();
   applyTheme();
   updateState();
-  updateStatus(true);
+  updateLint(true);
   editor.focus();
 
   window.AppCtx = {
