@@ -46,6 +46,17 @@ Dán nội dung có định dạng (Word, Google Docs, trang web, hoặc copy t�
 ```
   Biến: `{date}` `{time}` `{weekday}` `{cursor}` (vị trí con trỏ). `block: true` = chỉ hiện ở đầu dòng.
 
+## Trang web (.html) và JSON
+Cùng một editor, cùng menu `/`, nhưng theo loại file (đuôi `.html`/`.htm` hoặc `.json`):
+- **Tạo mới:** *File → New HTML Page* (`⌥⌘N`) hoặc *New JSON File* (`⌥⇧⌘N`); mở file có sẵn bằng `⌘O`. *Save As* chọn đuôi nào thì file thành loại đó. Menu `/` chỉ hiện lệnh của loại file đang soạn.
+- **HTML — lệnh `/` tự sinh code:** `/page` (trang hoàn chỉnh, có sẵn giao diện đẹp, sáng/tối, thích ứng điện thoại), `/h1` `/p` `/link` `/button`, `/nav` `/hero` `/section` `/cols2` `/cols3` `/grid` `/card` `/footer`, `/image` `/figure` `/video`, `/list` `/table` `/details`, `/alert` `/warning` `/badge` `/quote` `/code`, `/form` `/input` `/select` `/checkbox`, `/css` (chèn lại bộ giao diện chuẩn). Gõ `/` rồi gõ tiếp chữ để lọc như ở Markdown; lệnh chèn xong sẽ bôi đen chỗ cần thay (ví dụ tên ảnh, địa chỉ link) và giữ đúng thụt lề.
+- **HTML — gõ code đỡ sai:** gõ `<div>` thì tự thêm `</div>`; Enter giữ thụt lề và mở khung giữa thẻ mở/đóng; `⌘B` `⌘I` `⌘K` `⌘1-3` đổi thành `<strong>` `<em>` `<a>` `<h1-3>`; dán/kéo ảnh vào thì lưu cạnh file và chèn `<img>`.
+- **HTML — xem trước:** `⌘/` hiện trang trong khung an toàn (không chạy script, không nạp CSS/JS từ ngoài). Muốn xem đúng như người truy cập: **File → Open Page in Browser** (`⌥⌘B`, tự lưu trước) hoặc `/browser`. **Export → PDF** in cả trang HTML.
+- **JSON — lệnh `/`:** giá trị (`/string` `/number` `/true` `/null` `/object` `/array`), cặp tên:giá trị (`/pair` `/pairnumber` `/pairbool` `/pairobject` `/pairarray`), mẫu (`/person` `/records` `/package` `/settings`) và thao tác `/format` (thụt lề gọn), `/minify` (một dòng), `/sort` (sắp khóa A→Z), `/check` (tìm lỗi và nhảy tới đó). *Format → Format JSON* (`⌥⇧F`) = `/format`.
+- **JSON — báo lỗi ngay:** cạnh tên file có nhãn `✓ JSON` hoặc `✗ line N` (bấm để nhảy tới lỗi); thông báo bằng lời dễ hiểu (thiếu dấu phẩy, dấu phẩy thừa, nháy đơn, thiếu `}`…). Gõ `"` `{` `[` tự đóng cặp. `⌘/` hiện **cây thu/gọn** của dữ liệu. Lưu ý: Format/Minify/Sort đọc rồi ghi lại JSON, nên số nguyên quá lớn (> 15 chữ số) có thể bị làm tròn và khóa trùng tên chỉ còn một.
+- **Lệnh riêng:** trong `commands.json` thêm `"kind": "html"` hoặc `"kind": "json"` vào lệnh tùy chỉnh (mặc định là Markdown). Bảng *Commands…* tắt/bật riêng từng loại (`html:table` khác `table` của Markdown). Biến dùng thêm được `{year}`.
+- Các tính năng riêng của Markdown (Gantt, wiki link, backlinks, Word/PDF của ghi chú) không áp dụng cho file HTML/JSON; `⌘F` tìm trong văn bản ở chế độ Edit.
+
 ## Tìm trong ghi chú & Outline
 - **`⌘F`** mở thanh tìm (cả Edit lẫn Preview): tìm ngay khi gõ, hiện số kết quả `3/12`, `Enter` / `⇧Enter` đến kết quả sau / trước (hoặc `⌘G` / `⌥⌘G`), nút `Aa` bật phân biệt hoa/thường, `Esc` đóng. Edit: mọi kết quả được tô vàng, kết quả hiện tại được chọn trong ô soạn thảo và cuộn vào tầm nhìn; Preview: tô bằng `<mark>`. Chọn sẵn một đoạn chữ rồi bấm `⌘F` thì đoạn đó thành từ khóa.
 - **Outline `⇧⌘O`** (hoặc *View → Show Outline*): bảng bên trái liệt kê các heading `#`…`######` của note (thụt theo cấp, bỏ qua heading nằm trong code block và front matter). Bấm để nhảy tới heading (Edit và Preview); mục của phần đang xem được tô sáng khi cuộn.

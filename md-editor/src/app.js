@@ -1,5 +1,6 @@
 (() => {
   const E = window.Editing;
+  const F = window.Formats;
   const api = window.api;
   const $ = (id) => document.getElementById(id);
   const editor = $('editor');
@@ -13,7 +14,8 @@
   let slash = { items: [], index: 0, from: 0, query: '' };
   let docPath = null;
   let cmdConfig = {};
-  let items = E.buildItems();
+  let items = E.buildItems({}, F.ITEMS);
+  let kind = 'md'; // 'md' | 'html' | 'json' — decided by the file name
 
   marked.use({ extensions: [...MarkedMath.extensions, NotesCore.markedWikiLink] });
   // Other modules (panels.js: find, outline, notes search) plug into these.
@@ -46,6 +48,7 @@
 
   function onInput() {
     updateState();
+    updateStatus();
     updateSlash();
     fire('input');
   }
@@ -75,13 +78,14 @@
     if (e.metaKey || e.ctrlKey || e.altKey) return;
 
     const { value: v, selectionStart: s, selectionEnd: end } = editor;
+    const code = kind !== 'md';
     let ed = null;
-    if (e.key === 'Enter' && !e.shiftKey) ed = E.onEnter(v, s, end);
+    if (e.key === 'Enter' && !e.shiftKey) ed = code ? F.onEnterCode(kind, v, s, end) : E.onEnter(v, s, end);
     else if (e.key === 'Tab') {
       e.preventDefault();
       ed = E.onTab(v, s, end, e.shiftKey);
-    } else if (e.key === 'Backspace') ed = E.onBackspace(v, s, end);
-    else if (e.key.length === 1) ed = E.autoPair(v, s, end, e.key);
+    } else if (e.key === 'Backspace') ed = (code && F.onBackspaceCode(kind, v, s, end)) || E.onBackspace(v, s, end);
+    else if (e.key.length === 1) ed = code ? F.autoPairCode(kind, v, s, end, e.key) : E.autoPair(v, s, end, e.key);
 
     if (ed) {
       e.preventDefault();
@@ -92,12 +96,13 @@
   editor.addEventListener('paste', (e) => {
     const cd = e.clipboardData;
     const text = cd.getData('text/plain');
-    // A screenshot / copied picture: store it next to the note and insert ![](…).
+    // A screenshot / copied picture: store it next to the note and insert ![](…) (or <img> in a web page).
     const picture = [...cd.files].find((f) => f.type.startsWith('image/'));
-    if (picture && !text) {
+    if (picture && !text && kind !== 'json') {
       e.preventDefault();
       return void insertImages([{ file: picture, name: E.pastedImageName(new Date(), imageExt(picture.type)), alt: '' }]);
     }
+    if (kind !== 'md') return; // code is pasted as plain text
     // Rich text from Word, Google Docs or a web page becomes Markdown.
     const html = cd.getData('text/html');
     if (html && Html2Md.isRich(html)) {
@@ -127,7 +132,7 @@
       const bytes = new Uint8Array(await it.file.arrayBuffer());
       const r = await api.saveImage({ name: it.name, bytes, srcPath: it.path });
       if (r.error) toast(r.error === 'unsaved' ? 'Save the note first (⌘S).' : IMAGE_ERRORS[r.error] || 'Couldn’t add the image.');
-      else refs.push(E.imageRef(r.name, it.alt));
+      else refs.push(kind === 'html' ? F.htmlImage(r.name, it.alt) : E.imageRef(r.name, it.alt));
     }
     return refs;
   }
@@ -166,7 +171,13 @@
     const { value: v, selectionStart: s, selectionEnd: e } = editor;
     const marks = { bold: '**', italic: '*', strike: '~~', code: '`' };
     let ed;
-    if (action in marks) ed = E.wrap(v, s, e, marks[action]);
+    if (kind === 'html') {
+      const tags = { bold: 'strong', italic: 'em', strike: 's', code: 'code' };
+      if (action in tags) ed = F.htmlWrap(v, s, e, tags[action]);
+      else if (action === 'link') ed = F.htmlLink(v, s, e);
+      else if (/^h[123]$/.test(action)) ed = F.htmlHeading(v, s, Number(action[1]));
+    } else if (kind === 'json') return;
+    else if (action in marks) ed = E.wrap(v, s, e, marks[action]);
     else if (action === 'link') ed = E.link(v, s, e);
     else if (/^h[123]$/.test(action)) ed = E.heading(v, s, Number(action[1]));
     if (ed) applyEdit(ed);
@@ -219,7 +230,7 @@
 
   function updateSlash() {
     const q = E.slashQuery(editor.value, editor.selectionStart);
-    const found = q ? E.filterSlash(q.query, items, { lineStart: q.lineStart }) : [];
+    const found = q ? E.filterSlash(q.query, items, { lineStart: q.lineStart, kind }) : [];
     if (!q || !found.length || editor.selectionStart !== editor.selectionEnd) return hideSlash();
     slash = { items: found, index: 0, from: q.from, query: q.query };
     renderSlash();
@@ -268,7 +279,7 @@
       actions[item.action]?.();
       return;
     }
-    applyEdit(E.applySlash(editor.value, editor.selectionStart, slash.from, item));
+    applyEdit(E.applySlash(editor.value, editor.selectionStart, slash.from, item, undefined, { indent: kind !== 'md' }));
     hideSlash();
   }
 
@@ -332,10 +343,78 @@
     });
   }
 
+  // A web page is shown as the browser would, in a frame that runs no scripts and cannot leave the page.
+  function renderHtmlPreview() {
+    const frame = document.createElement('iframe');
+    frame.className = 'html-frame';
+    frame.setAttribute('sandbox', '');
+    frame.setAttribute('referrerpolicy', 'no-referrer');
+    frame.srcdoc = editor.value;
+    preview.replaceChildren(frame);
+  }
+
+  // JSON: a verdict line (valid, or where the first mistake is) and a collapsible tree.
+  const describeJson = (v) =>
+    Array.isArray(v) ? `a list of ${v.length} ${v.length === 1 ? 'item' : 'items'}` : v && typeof v === 'object' ? `an object with ${Object.keys(v).length} ${Object.keys(v).length === 1 ? 'key' : 'keys'}` : `a single ${v === null ? 'null' : typeof v} value`;
+
+  function jsonTree(root) {
+    let budget = 5000;
+    const leaf = (v) => {
+      const type = v === null ? 'null' : typeof v;
+      let text = type === 'string' ? JSON.stringify(v) : String(v);
+      if (text.length > 400) text = text.slice(0, 400) + '…';
+      return el('span', 'jv ' + type, text);
+    };
+    const build = (key, v, depth) => {
+      const label = key === null ? [] : [el('span', 'jk', String(key)), ': '];
+      const container = v && typeof v === 'object';
+      const entries = container ? (Array.isArray(v) ? v.map((x, i) => [i, x]) : Object.entries(v)) : [];
+      if (!container || !entries.length) {
+        const row = el('div', 'jrow');
+        row.append(...label, container ? el('span', 'jm', Array.isArray(v) ? '[ ]' : '{ }') : leaf(v));
+        return row;
+      }
+      const box = el('details', 'jt');
+      box.open = depth < 2;
+      const head = el('summary');
+      head.append(...label, el('span', 'jm', Array.isArray(v) ? `[ ${entries.length} ]` : `{ ${entries.length} }`));
+      box.append(head);
+      for (const [k, x] of entries) {
+        if (budget-- <= 0) {
+          box.append(el('div', 'jrow jm', '… more not shown — use Edit to see everything'));
+          break;
+        }
+        box.append(build(k, x, depth + 1));
+      }
+      return box;
+    };
+    return build(null, root, 0);
+  }
+
+  function renderJsonPreview() {
+    const r = F.jsonCheck(editor.value);
+    const bar = el('div', 'json-bar ' + (r.ok ? 'ok' : 'bad'));
+    preview.replaceChildren(bar);
+    if (r.ok) {
+      bar.textContent = '✓ Valid JSON — ' + describeJson(r.value);
+      preview.append(jsonTree(r.value));
+      return;
+    }
+    bar.textContent = r.empty ? r.message : `✗ Line ${r.line}, column ${r.col}: ${r.message}`;
+    if (r.empty) return;
+    const go = el('button', 'link', 'Show in editor');
+    go.addEventListener('click', () => jumpTo({ line: r.line, col: r.col - 1, len: 1 }));
+    bar.append(' ', go);
+  }
+
   function renderPreview() {
-    const fm = E.parseFrontMatter(editor.value);
-    renderInto(preview, fm.body);
-    if (fm.meta['gantt-block']) preview.prepend(ganttCard(fm.meta));
+    if (kind === 'html') renderHtmlPreview();
+    else if (kind === 'json') renderJsonPreview();
+    else {
+      const fm = E.parseFrontMatter(editor.value);
+      renderInto(preview, fm.body);
+      if (fm.meta['gantt-block']) preview.prepend(ganttCard(fm.meta));
+    }
     fire('render');
   }
 
@@ -424,7 +503,7 @@
   function applyConfig(cfg) {
     if (!cfg || cfg.error) return;
     cmdConfig = cfg;
-    items = E.buildItems(cfg);
+    items = E.buildItems(cfg, F.ITEMS);
   }
 
   async function reloadCommands() {
@@ -434,9 +513,9 @@
   async function openCommandsSheet() {
     const cfg = await api.loadCommands();
     applyConfig(cfg);
-    const all = E.buildItems(cmdConfig);
+    const all = E.buildItems(cmdConfig, F.ITEMS);
     const save = async () => {
-      const disabled = all.filter((i) => !i.enabled).map((i) => i.key);
+      const disabled = all.filter((i) => !i.enabled).map((i) => i.id);
       await api.setDisabledCommands(disabled);
       applyConfig({ ...cmdConfig, disabled });
     };
@@ -663,6 +742,7 @@
 
   // Everything that follows Gantt: the project notes list and the tasks tables.
   async function refreshLive() {
+    if (kind !== 'md') return false;
     const notes = await refreshProjectNotes();
     const tables = await refreshGanttBlocks();
     return notes || tables === true;
@@ -762,11 +842,13 @@
   }
 
   // ---------- export ----------
-  async function exportAs(kind) {
+  async function exportAs(format) {
+    if (kind === 'json' || (kind === 'html' && format === 'docx')) return toast(kind === 'json' ? 'Export is for Markdown notes and web pages.' : 'Word export is for Markdown notes. A web page can be exported as PDF.');
     const body = E.stripProjectNotes(E.parseFrontMatter(editor.value).body);
     toast('Exporting…');
     let r;
-    if (kind === 'pdf') {
+    if (kind === 'html') r = await api.exportPdf({ html: editor.value, raw: true });
+    else if (format === 'pdf') {
       const holder = document.createElement('div');
       renderInto(holder, body);
       holder.querySelectorAll('a.wikilink').forEach((a) => a.replaceWith(a.textContent)); // [[links]] are plain text on paper
@@ -826,10 +908,11 @@
     docPath = doc ? doc.path : null;
     let base = document.querySelector('base');
     if (!base) document.head.prepend((base = document.createElement('base')));
-    if (doc) base.href = encodeURI('file://' + doc.dir + '/');
+    if (doc && doc.dir) base.href = encodeURI('file://' + doc.dir + '/');
     else base.remove();
     editor.setSelectionRange(0, 0);
     editor.scrollTop = 0;
+    setKind(F.kindOf(name));
     if (mode === 'preview') setMode('preview');
     updateState();
     refreshLive().then((changed) => changed && mode === 'preview' && renderPreview());
@@ -838,11 +921,15 @@
 
   async function save(as) {
     await refreshLive();
-    const doc = await (as ? api.saveAs(editor.value) : api.save(editor.value));
+    const doc = await (as ? api.saveAs(editor.value, name) : api.save(editor.value, name));
     if (!doc) return false;
     saved = doc.content;
     name = doc.name;
     docPath = doc.path;
+    if (F.kindOf(name) !== kind) {
+      setKind(F.kindOf(name));
+      if (mode === 'preview') setMode('preview');
+    }
     updateState();
     return true;
   }
@@ -882,6 +969,74 @@
     if (j) jumpTo(j);
   }
 
+  // ---------- kinds of file: web page and JSON ----------
+  const statusEl = $('docstatus');
+  let statusTimer = 0;
+  let jsonError = null;
+
+  function setKind(next) {
+    kind = next;
+    document.body.dataset.kind = kind;
+    updateStatus(true);
+  }
+
+  // JSON files show a small verdict next to the file name: ✓ valid, or ✗ and the line of the first mistake.
+  function updateStatus(now) {
+    clearTimeout(statusTimer);
+    if (kind !== 'json') return void (statusEl.hidden = true);
+    const run = () => {
+      const r = F.jsonCheck(editor.value);
+      jsonError = r.ok || r.empty ? null : r;
+      statusEl.hidden = !!r.empty;
+      statusEl.className = r.ok ? 'ok' : 'bad';
+      statusEl.textContent = r.ok ? '✓ JSON' : `✗ line ${r.line}`;
+      statusEl.title = r.ok ? 'Valid JSON' : r.message + ' — click to go there';
+    };
+    if (now) run();
+    else statusTimer = setTimeout(run, 200);
+  }
+
+  statusEl.addEventListener('click', () => jsonError && jumpTo({ line: jsonError.line, col: jsonError.col - 1, len: 1 }));
+
+  function transformJson(fn, done) {
+    if (kind !== 'json') return toast('This command is for JSON files.');
+    const out = fn(editor.value);
+    if (out === null) return checkJson();
+    if (mode === 'preview') setMode('edit');
+    if (out === editor.value) return toast('Already ' + done.toLowerCase());
+    applyEdit({ from: 0, to: editor.value.length, text: out, selStart: 0, selEnd: 0 });
+    toast(done);
+  }
+
+  function checkJson() {
+    if (kind !== 'json') return toast('This command is for JSON files.');
+    const r = F.jsonCheck(editor.value);
+    if (r.ok) return toast('✓ Valid JSON — ' + describeJson(r.value));
+    toast(r.empty ? r.message : `✗ Line ${r.line}, column ${r.col}: ${r.message}`);
+    if (!r.empty) jumpTo({ line: r.line, col: r.col - 1, len: 1 });
+  }
+
+  // The preview frame runs no scripts and loads no outside styles; the browser shows the page exactly as visitors see it.
+  async function openInBrowser() {
+    if (kind !== 'html') return toast('Open in Browser is for web pages (.html).');
+    if (!docPath || isDirty()) {
+      toast('Saving the page first…');
+      if (!(await save(false))) return;
+    }
+    api.openExternal(encodeURI('file://' + docPath));
+  }
+
+  // File → New HTML Page / New JSON File: a starter text, saved as .html / .json.
+  function newDoc(next) {
+    if (!F.KINDS.includes(next)) return;
+    loadDoc({ content: F.templateFor(next), name: 'Untitled.' + F.EXT[next], path: null, dir: null });
+    if (next === 'html') {
+      const at = editor.value.indexOf('Viết nội dung');
+      editor.setSelectionRange(at, at);
+    } else if (next === 'json') editor.setSelectionRange(4, 4);
+    editor.focus();
+  }
+
   const actions = {
     toggle: () => setMode(mode === 'edit' ? 'preview' : 'edit'),
     night: toggleNight,
@@ -899,6 +1054,13 @@
     'gantt-unlink': unlinkFromGantt,
     'gantt-table': ganttTableCommand,
     'project-notes': projectNotesCommand,
+    'new-kind': newDoc,
+    'format-doc': () => (kind === 'json' ? actions['json-format']() : toast('Format works on JSON files.')),
+    'json-format': () => transformJson(F.jsonFormat, 'Formatted'),
+    'json-minify': () => transformJson(F.jsonMinify, 'Minified to one line'),
+    'json-sort': () => transformJson(F.jsonSortKeys, 'Keys sorted A→Z'),
+    'json-check': checkJson,
+    'open-browser': openInBrowser,
     'export-pdf': () => exportAs('pdf'),
     'export-docx': () => exportAs('docx'),
     'paste-plain': (text) => {
@@ -924,13 +1086,14 @@
     e.preventDefault();
     const items = [...e.dataTransfer.files].map((file) => ({ file, path: api.pathForFile(file) }));
     if (!items.length) return;
+    if (kind === 'json') return toast('Files can’t be dropped into a JSON file.');
     const isPicture = (it) => it.file.type.startsWith('image/') || E.isImageName(it.file.name);
     const pictures = items.filter(isPicture).map((it) => ({
       ...it,
       name: E.isImageName(it.file.name) ? it.file.name : E.pastedImageName(new Date(), imageExt(it.file.type)),
       alt: it.file.name.replace(/\.[^.]+$/, ''),
     }));
-    const links = items.filter((it) => !isPicture(it) && it.path).map((it) => E.fileLink(it.path));
+    const links = items.filter((it) => !isPicture(it) && it.path).map((it) => (kind === 'html' ? F.htmlFileLink(it.path) : E.fileLink(it.path)));
     if (!pictures.length && !links.length) return;
     if (mode === 'preview') setMode('edit');
     editor.focus();
@@ -946,11 +1109,13 @@
   reloadCommands();
   applyTheme();
   updateState();
+  updateStatus(true);
   editor.focus();
 
   window.AppCtx = {
     editor, preview, el, toast, hooks, offsetsY, caretXY, applyEdit, setMode, jumpTo, actions,
     getMode: () => mode,
+    getKind: () => kind,
     getDocPath: () => docPath,
     isDirty,
   };

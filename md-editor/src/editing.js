@@ -136,10 +136,10 @@
   const fmtTime = (d) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
   const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
-  // Variables usable in command text: {date} {time} {datetime} {weekday}; {cursor} marks the caret.
+  // Variables usable in command text: {date} {time} {datetime} {weekday} {year}; {cursor} marks the caret.
   function expand(text, now) {
-    return text.replace(/\{(date|time|datetime|weekday)\}/g, (_, k) =>
-      k === 'date' ? fmtDate(now) : k === 'time' ? fmtTime(now) : k === 'weekday' ? WEEKDAYS[now.getDay()] : fmtDate(now) + ' ' + fmtTime(now)
+    return text.replace(/\{(date|time|datetime|weekday|year)\}/g, (_, k) =>
+      k === 'date' ? fmtDate(now) : k === 'time' ? fmtTime(now) : k === 'weekday' ? WEEKDAYS[now.getDay()] : k === 'year' ? String(now.getFullYear()) : fmtDate(now) + ' ' + fmtTime(now)
     );
   }
 
@@ -216,12 +216,18 @@
     ].map(([n, g]) => it('Math', n, n[0].toUpperCase() + n.slice(1), g, '\\' + n)),
   ];
 
-  // Combine built-ins with the user's commands.json ({ disabled: [keys], custom: [{key,label,text,...}] }).
-  function buildItems(config = {}) {
+  // Combine built-ins with the user's commands.json ({ disabled: [keys], custom: [{key,label,text,kind?,...}] }).
+  // `extra` is the HTML / JSON command list (Formats.ITEMS); the app passes it, Markdown-only callers need not.
+  // Commands for other kinds are stored with an id like "html:table"; Markdown ones keep their plain key.
+  const KIND_OF = (c) => (c && ['md', 'html', 'json'].includes(c.kind) ? c.kind : 'md');
+  function buildItems(config = {}, extra = []) {
     const disabled = new Set(Array.isArray(config.disabled) ? config.disabled : []);
+    const idOf = (kind, key) => (kind === 'md' ? key : kind + ':' + key);
     const custom = (Array.isArray(config.custom) ? config.custom : [])
       .filter((c) => c && typeof c.key === 'string' && /^[\w-]+$/.test(c.key) && typeof c.text === 'string')
       .map((c) => ({
+        kind: KIND_OF(c),
+        id: idOf(KIND_OF(c), c.key),
         group: 'Custom',
         key: c.key,
         label: typeof c.label === 'string' && c.label ? c.label : c.key,
@@ -230,10 +236,12 @@
         block: !!c.block,
         custom: true,
       }));
-    const overridden = new Set(custom.map((c) => c.key));
-    return SLASH_ITEMS.filter((i) => !overridden.has(i.key))
+    const overridden = new Set(custom.map((c) => c.id));
+    return SLASH_ITEMS.map((i) => ({ kind: 'md', id: i.key, ...i }))
+      .concat(extra)
+      .filter((i) => !overridden.has(i.id))
       .concat(custom)
-      .map((i) => ({ ...i, enabled: !disabled.has(i.key) }));
+      .map((i) => ({ ...i, enabled: !disabled.has(i.id) }));
   }
 
   // Detects "/query" typed at the start of a line, or "/query" (1+ chars) after whitespace mid-line.
@@ -249,8 +257,9 @@
   // Prefix filter: "h" keeps commands starting with h, "he" narrows further, ...
   function filterSlash(query, items = SLASH_ITEMS, opts = {}) {
     const atLineStart = opts.lineStart !== false;
+    const kind = opts.kind || 'md';
     const q = query.toLowerCase();
-    const pool = items.filter((i) => i.enabled !== false && (atLineStart || !i.block));
+    const pool = items.filter((i) => (i.kind || 'md') === kind && i.enabled !== false && (atLineStart || !i.block));
     if (!q) return pool;
     const rank = (i) => (i.key.toLowerCase().startsWith(q) ? 0 : i.label.toLowerCase().startsWith(q) ? 1 : -1);
     return pool
@@ -260,8 +269,12 @@
       .map((x) => x[2]);
   }
 
-  function applySlash(v, s, from, item, now = new Date()) {
+  // `opts.indent`: code files keep the nesting — every new line of the command starts at the indentation of the
+  // line it is typed on.
+  function applySlash(v, s, from, item, now = new Date(), opts = {}) {
     let text = expand(item.text || '', now);
+    const lead = opts.indent ? /^[ \t]*/.exec(v.slice(lineStart(v, from), from))[0] : '';
+    const shift = (at) => at + lead.length * (text.slice(0, at).split('\n').length - 1);
     let a;
     let b;
     if (item.select) [a, b] = item.select;
@@ -269,6 +282,10 @@
       const c = text.indexOf('{cursor}');
       text = text.split('{cursor}').join('');
       a = b = c >= 0 ? c : text.length;
+    }
+    if (lead) {
+      [a, b] = [shift(a), shift(b)];
+      text = text.split('\n').map((l, i) => (i && l ? lead + l : l)).join('\n');
     }
     return edit(from, s, text, from + a, from + b);
   }

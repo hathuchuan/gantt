@@ -2,8 +2,8 @@ const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 contextBridge.exposeInMainWorld('api', {
   readPath: (p) => ipcRenderer.invoke('file:read', p),
-  save: (content) => ipcRenderer.invoke('file:save', content),
-  saveAs: (content) => ipcRenderer.invoke('file:save-as', content),
+  save: (content, name) => ipcRenderer.invoke('file:save', content, name),
+  saveAs: (content, name) => ipcRenderer.invoke('file:save-as', content, name),
   confirmDiscard: () => ipcRenderer.invoke('doc:confirm-discard'),
   setState: (state) => ipcRenderer.send('doc:state', state),
   closeNow: () => ipcRenderer.send('win:close-now'),
