@@ -46,6 +46,13 @@ Dán nội dung có định dạng (Word, Google Docs, trang web, hoặc copy t�
 ```
   Biến: `{date}` `{time}` `{weekday}` `{cursor}` (vị trí con trỏ). `block: true` = chỉ hiện ở đầu dòng.
 
+## Tô màu cú pháp trong ô soạn thảo
+Ở chế độ Edit, mã nguồn được tô màu theo loại file (tự đổi theo giao diện sáng/tối):
+- **Markdown:** heading, **đậm**/*nghiêng*/~~gạch~~, `code`, link và URL, `[[wiki]]`, công thức `$…$` / `$$…$$`, danh sách/to-do, quote, bảng, chú thích `<!-- -->`, front matter (khóa/giá trị). Khối code có ghi ngôn ngữ (` ```json `, ` ```html `, ` ```css `, ` ```js `…) được tô theo ngôn ngữ đó.
+- **HTML:** thẻ, thuộc tính, giá trị, chú thích, `<!doctype>`, ký tự `&amp;`; nội dung `<style>` tô như CSS (selector, thuộc tính, màu, số), `<script>` tô như JavaScript (từ khóa, chuỗi, hàm, chú thích; `type="application/ld+json"` tô như JSON).
+- **JSON:** khóa, chuỗi, số, `true`/`false`, `null`, dấu câu, chú thích.
+- Chỉ đổi màu chữ, không đổi chữ đậm/nghiêng/cỡ nên con trỏ, chọn chữ, tìm kiếm và gạch chân lỗi vẫn khớp. File lớn hơn 300.000 ký tự hiển thị chữ thường để gõ không bị chậm.
+
 ## Trang web (.html) và JSON
 Cùng một editor, cùng menu `/`, nhưng theo loại file (đuôi `.html`/`.htm` hoặc `.json`):
 - **Tạo mới:** *File → New HTML Page* (`⌥⌘N`) hoặc *New JSON File* (`⌥⇧⌘N`); mở file có sẵn bằng `⌘O`. *Save As* chọn đuôi nào thì file thành loại đó. Menu `/` chỉ hiện lệnh của loại file đang soạn.

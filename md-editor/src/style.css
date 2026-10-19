@@ -8,6 +8,8 @@
   --accent: #0a6cff;
   --select: rgba(10, 108, 255, 0.18);
   --shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+  --syn-tag: #0550ae; --syn-attr: #8250df; --syn-str: #0a7f3f; --syn-num: #b35900; --syn-kw: #cf222e;
+  --syn-fn: #8250df; --syn-comment: #8a8f98; --syn-punct: #8c959f; --syn-meta: #6e40c9; --syn-head: #0550ae; --syn-link: #0a6cff;
   --sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif;
   --mono: ui-monospace, 'SF Mono', Menlo, monospace;
   --measure: 720px;
@@ -22,6 +24,8 @@
   --accent: #5aa2ff;
   --select: rgba(90, 162, 255, 0.28);
   --shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+  --syn-tag: #79c0ff; --syn-attr: #d2a8ff; --syn-str: #7ee787; --syn-num: #ffa657; --syn-kw: #ff7b72;
+  --syn-fn: #d2a8ff; --syn-comment: #7d8590; --syn-punct: #8b949e; --syn-meta: #bc8cff; --syn-head: #79c0ff; --syn-link: #5aa2ff;
 }
 
 * { box-sizing: border-box; }
@@ -65,7 +69,7 @@ body[data-mode='preview'] #toggle .i-pen { display: block; }
 /* Editor */
 body { --side: 0px; }
 body[data-side] { --side: 264px; }
-#editor, #preview, #hl, #lint {
+#editor, #preview, #hl, #lint, #syn {
   position: absolute; top: 0; bottom: 0; left: var(--side);
   width: calc(100% - var(--side)); height: 100%;
   padding: 64px max(28px, calc(50% - var(--measure) / 2)) 96px;
@@ -73,13 +77,13 @@ body[data-side] { --side: 264px; }
   border: 0; outline: 0; resize: none;
   overflow-y: auto;
 }
-#editor, #hl, #lint {
+#editor, #hl, #lint, #syn {
   font: 15px/1.75 var(--mono);
   tab-size: 2;
   caret-color: var(--accent);
 }
 /* Find in Edit mode: the same text, invisible, under the textarea, with the hits marked */
-#hl, #lint {
+#hl, #lint, #syn {
   z-index: 0; overflow: hidden; pointer-events: none; color: transparent;
   white-space: pre-wrap; overflow-wrap: break-word; word-wrap: break-word;
 }
@@ -328,3 +332,24 @@ body[data-problems] #editor { padding-bottom: 200px; }
 #fmtpop .swatch { min-width: 24px; width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--line); }
 #fmtpop .opt { flex: 1 0 100%; text-align: left; }
 #fmtpop input[type='color'] { width: 100%; height: 28px; border: 0; padding: 0; background: none; cursor: pointer; }
+
+/* Syntax colours. The coloured text sits behind the transparent textarea, so only the colour may change here —
+   never weight, style or size, or the two layers would drift apart. */
+#syn { color: var(--fg); }
+body[data-syntax] #editor { color: transparent; }
+body[data-syntax] #editor::selection { color: transparent; }
+#syn .t-tag, #syn .t-key { color: var(--syn-tag); }
+#syn .t-attr, #syn .t-fn { color: var(--syn-attr); }
+#syn .t-str { color: var(--syn-str); }
+#syn .t-num, #syn .t-ent, #syn .t-math { color: var(--syn-num); }
+#syn .t-kw { color: var(--syn-kw); }
+#syn .t-null { color: var(--syn-kw); }
+#syn .t-comment { color: var(--syn-comment); }
+#syn .t-punct, #syn .t-quote, #syn .t-fence { color: var(--syn-punct); }
+#syn .t-meta { color: var(--syn-meta); }
+#syn .t-hmark, #syn .t-h, #syn .t-list { color: var(--syn-head); }
+#syn .t-link, #syn .t-wiki { color: var(--syn-link); }
+#syn .t-url { color: var(--syn-comment); }
+#syn .t-code { color: var(--syn-str); }
+#syn .t-bold, #syn .t-em { color: var(--syn-attr); }
+#syn .t-strike { color: var(--syn-comment); text-decoration: line-through; }

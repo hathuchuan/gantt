@@ -51,6 +51,7 @@
 
   function onInput() {
     updateState();
+    paintSyntax();
     updateLint();
     updateFmtBar();
     updateSlash();
@@ -456,6 +457,7 @@
     dst.scrollTop = ratio * (dst.scrollHeight - dst.clientHeight);
     $('toggle').title = mode === 'edit' ? 'Preview (⌘/)' : 'Edit (⌘/)';
     renderLint();
+    paintSyntax();
     fire('mode');
   }
 
@@ -991,6 +993,7 @@
   // ---------- kinds of file: web page and JSON ----------
   const statusEl = $('docstatus');
   const lintEl = $('lint');
+  const synEl = $('syn');
   const problemsBox = $('problems');
   let lintTimer = 0;
   let problems = [];
@@ -1003,6 +1006,25 @@
     panelClosed = false;
     hideFmt();
     updateLint(true);
+    paintSyntax();
+  }
+
+  // Colours the source: the same text is drawn, coloured, behind the transparent textarea. If anything goes wrong
+  // (or the file is huge) the textarea simply shows its own plain text again.
+  function paintSyntax() {
+    const plain = () => {
+      document.body.removeAttribute('data-syntax');
+      synEl.textContent = '';
+    };
+    if (mode !== 'edit' || editor.value.length > Syntax.MAX_LENGTH) return plain();
+    try {
+      synEl.style.width = editor.clientWidth + 'px';
+      synEl.innerHTML = Syntax.highlight(kind, editor.value) + '\n';
+      synEl.scrollTop = editor.scrollTop;
+      document.body.dataset.syntax = '';
+    } catch {
+      plain();
+    }
   }
 
   // Mistakes in the web page / JSON are found while typing (a moment after the last key): wavy underline in the
@@ -1075,8 +1097,14 @@
     jumpTo({ line: p.line, col: p.col - 1, len: Math.max(1, p.len) });
   }
 
-  editor.addEventListener('scroll', () => (lintEl.scrollTop = editor.scrollTop));
-  addEventListener('resize', paintLint);
+  editor.addEventListener('scroll', () => {
+    lintEl.scrollTop = editor.scrollTop;
+    synEl.scrollTop = editor.scrollTop;
+  });
+  addEventListener('resize', () => {
+    paintLint();
+    paintSyntax();
+  });
   $('pb-close').addEventListener('click', () => {
     panelClosed = true;
     renderLint();
