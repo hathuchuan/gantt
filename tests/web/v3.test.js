@@ -358,6 +358,35 @@ const SETUP = `
     await page.evaluate(() => { window.__acts.push({ id: 'a4', courseId: courses[0].id, kind: 'session_prep', idx: 0, guard: courses[0].sessions[0].teachDate, done: false, at: '2026-10-16T02:00:00Z' }); });
     await page.evaluate(() => pollWidgetActions());
     check('Thao tác mới (bỏ hoàn thành) được áp dụng', (await page.evaluate(() => courses[0].sessions[0].prepDone)) === false);
+
+    // Submit nghiên cứu / sản phẩm tư vấn: nhận theo ngày (guard) dù thứ tự đã đổi; nhật ký + bảng trạng thái
+    const r2 = await page.evaluate(async () => {
+      const d = (n) => addDays(getTodayStr(), n);
+      courses = normalizeCourses([
+        { name: 'N1', category: 'Nghiên cứu', submissions: [{ num: 1, title: 'S0', date: d(3) }, { num: 2, title: 'S1', date: d(6) }], sessions: [] },
+        { name: 'T1', category: 'Tư vấn doanh nghiệp', deliverables: [{ num: 1, title: 'D1', date: d(9) }], sessions: [] }
+      ]);
+      saveData(); renderGantt();
+      window.__acts.push(
+        { id: 'b1', courseId: courses[0].id, kind: 'research_submit', idx: 0, guard: d(6), label: 'N1 — S1', done: true, at: '2026-10-16T03:00:00Z' },
+        { id: 'b2', courseId: courses[1].id, kind: 'consulting_deliverable', idx: 0, guard: d(9), label: 'T1 — D1', done: true, at: '2026-10-16T03:01:00Z' },
+        { id: 'b3', courseId: courses[1].id, kind: 'consulting_deliverable', idx: 4, guard: d(40), label: 'T1 — đã xóa', done: true, at: '2026-10-16T03:02:00Z' }
+      );
+      const n = await pollWidgetActions();
+      const box = document.getElementById('widgetSyncBox');
+      return {
+        n,
+        s0: !!courses[0].submissions[0].done, s1: !!courses[0].submissions[1].done, d1: !!courses[1].deliverables[0].done,
+        toast: document.getElementById('appToast').textContent,
+        shown: box && box.style.display !== 'none',
+        log: Array.from(document.querySelectorAll('#widgetSyncLog li')).map(li => ({ t: li.textContent, missing: li.classList.contains('missing') })),
+        stored: JSON.parse(readStored('academic_smart_gantt_widget_log') || '[]').length
+      };
+    });
+    check('Widget → Gantt: Submit theo ngày (không theo vị trí) + sản phẩm tư vấn', r2.n === 2 && r2.s0 === false && r2.s1 === true && r2.d1 === true, r2);
+    check('Thông báo nêu số việc và việc không còn khối', /đã đồng bộ 2 việc/.test(r2.toast) && /1 việc không còn khối/.test(r2.toast), r2.toast);
+    check('Bảng 📱 Widget iPhone trong tab Mac hiện nhật ký (mới nhất trước, khối mất gạch ngang)', r2.shown && r2.log.length >= 3 && r2.log[0].missing && /T1 — D1/.test(r2.log[1].t), r2.log);
+    check('Nhật ký widget được lưu', r2.stored >= 6, r2.stored);
     await page.close();
   }
 

@@ -22,6 +22,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     let options = LaunchOptions(CommandLine.arguments)
 
     var snapshotTimer: Timer?
+    var widgetWatcher: WidgetFolderWatcher?
     var lastPulledRev = -1
     var terminating = false
 
@@ -64,6 +65,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         createWindow()
         loadPage()
         startSnapshotTimer()
+        startWidgetWatcher()
         if options.isAnySelfTest {
             DispatchQueue.main.asyncAfter(deadline: .now() + 120) { [weak self] in
                 self?.failSelfTest("timeout")
@@ -145,6 +147,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         snapshotTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
             self?.pullPageState(force: false)
         }
+    }
+
+    /// iPhone vừa đánh dấu hoàn thành (iCloud tải về gantt_actions.json mới) → trang áp dụng ngay.
+    private func startWidgetWatcher() {
+        guard !options.isAnySelfTest else { return }
+        let watcher = WidgetFolderWatcher { [weak self] in
+            guard let self = self, self.pageReady, self.webView != nil else { return }
+            self.webView.evaluateJavaScript("typeof pollWidgetActions === 'function' && pollWidgetActions(); true", completionHandler: nil)
+        }
+        watcher.start()
+        widgetWatcher = watcher
     }
 
     // MARK: - Cửa sổ & WebView
@@ -443,9 +456,11 @@ extension AppDelegate: WKScriptMessageHandlerWithReply {
             }
             reply(.success(true))
         case "readWidgetActions":
-            reply(.success(WidgetBridge.readActions()))
+            WidgetBridge.readActions { reply(.success($0 as Any)) }
         case "writeWidgetAck":
-            reply(.success(WidgetBridge.writeAck(body["content"] as? String ?? "")))
+            WidgetBridge.writeAck(body["content"] as? String ?? "") { reply(.success($0 as Any)) }
+        case "widgetStatus":
+            reply(.success(["available": WidgetBridge.isAvailable]))
         case "openURL":
             openMarkdownEditorURL(body["url"] as? String, reply: reply)
         case "openTextFile":

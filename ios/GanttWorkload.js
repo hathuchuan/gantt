@@ -1,6 +1,7 @@
 // Widget iPhone "Tải công việc" cho Academic Gantt Planner — chạy trong app Scriptable.
 // Bấm vào widget → chọn ngày (hôm nay hoặc ngày khác) → widget hiển thị tải công việc ngày đó.
 // Bấm vào một dòng việc (widget cỡ vừa / lớn) hoặc "Đánh dấu hoàn thành…" → đánh dấu xong, tự đồng bộ về app Mac.
+// Hôm nay: kèm các việc quá hạn chưa xong (⚠️) để đánh dấu luôn; dòng cuối cho biết còn bao nhiêu việc chờ Mac nhận.
 // Đồng bộ ngược: widget ghi gantt_actions.json; app Mac áp dụng rồi ghi gantt_actions_ack.json.
 // Dữ liệu: gantt_courses.json do app Mac ghi vào iCloud Drive/Scriptable (xem ios/README.md).
 
@@ -15,8 +16,10 @@ const STAGES = {
   prep: { label: "Soạn bài", color: "#fb923c" },
   teach: { label: "Dạy", color: "#60a5fa" },
   eval: { label: "Chấm thi", color: "#34d399" },
+  submit: { label: "Submit", color: "#c084fc" },
+  deliv: { label: "Sản phẩm", color: "#4ade80" },
 };
-const ORDER = { macro: 0, prep: 1, teach: 2, eval: 3 };
+const ORDER = { macro: 0, prep: 1, teach: 2, eval: 3, submit: 4, deliv: 5 };
 
 const fm = FileManager.iCloud();
 const pad = (n) => String(n).padStart(2, "0");
@@ -54,10 +57,12 @@ async function loadActions() {
   const raw = await readJson(ACTIONS_FILE, []);
   return Array.isArray(raw) ? raw : [];
 }
-async function loadAckedIds() {
+async function loadAck() {
   const raw = await readJson(ACK_FILE, {});
-  return new Set(Array.isArray(raw.ids) ? raw.ids : []);
+  return { ids: new Set(Array.isArray(raw.ids) ? raw.ids : []), at: raw.at || null };
 }
+async function loadAckedIds() { return (await loadAck()).ids; }
+const actionKey = (a) => [a.courseId, a.kind, a.idx, a.guard || ""].join("|");
 // Ghi thêm một thao tác; dọn các thao tác Mac đã xác nhận từ lâu.
 async function appendAction(act, done) {
   const actions = await loadActions();
@@ -90,6 +95,11 @@ function applyAction(courses, a) {
     let e = evs[a.idx];
     if (a.guard && (!e || e.start !== a.guard)) e = evs.find((x) => x && x.start === a.guard);
     if (e) e.done = done;
+  } else if (a.kind === "research_submit" || a.kind === "consulting_deliverable") {
+    const list = (a.kind === "research_submit" ? c.submissions : c.deliverables) || [];
+    let it = list[a.idx];
+    if (a.guard && (!it || it.date !== a.guard)) it = list.find((x) => x && x.date === a.guard);
+    if (it) it.done = done;
   }
 }
 async function overlayPendingActions(courses) {
@@ -151,7 +161,22 @@ function workFor(courses, f) {
   const prep = new Set();
   for (const c of courses) {
     const t = theme(c.category);
-    if (t !== "other" || fullyDone(c)) continue;
+    if (t === "nc") {
+      if (c.reviewStatus) continue; // đang chờ journal quyết định
+      (c.submissions || []).forEach((x, i) => {
+        if (x && !x.done && x.date === f) items.push({ stage: "submit", name: c.name, detail: x.title || `Submit lần ${i + 1}`,
+          act: { courseId: c.id, kind: "research_submit", idx: i, guard: x.date, label: `${c.name} — ${x.title || "Submit"}` } });
+      });
+      continue;
+    }
+    if (t === "tv") {
+      (c.deliverables || []).forEach((x, i) => {
+        if (x && !x.done && x.date === f) items.push({ stage: "deliv", name: c.name, detail: x.title || `Sản phẩm ${i + 1}`,
+          act: { courseId: c.id, kind: "consulting_deliverable", idx: i, guard: x.date, label: `${c.name} — ${x.title || "Sản phẩm"}` } });
+      });
+      continue;
+    }
+    if (fullyDone(c)) continue;
     const s = c.sessions || [];
     const md = parseInt(c.macroDays, 10) || 0;
     if (md > 0 && s.length && !c.macroDone) {
@@ -185,7 +210,53 @@ function workFor(courses, f) {
     }
   }
   items.sort((a, b) => ORDER[a.stage] - ORDER[b.stage]);
-  return { items, prepCount: prep.size };
+  // Đang xem hôm nay: thêm các việc đã quá hạn mà chưa đánh dấu (giống ô "Quá hạn" trên Mac)
+  const late = f === today() ? overdueFor(courses, f).filter((o) => !items.some((it) => it.act && actionKey(it.act) === actionKey(o.act))) : [];
+  return { items: items.concat(late), prepCount: prep.size, lateCount: late.length };
+}
+
+// Việc đã qua ngày kết thúc mà chưa xong (giống getOverdueBlocks trong web/academic_gantt_planner.html)
+function overdueFor(courses, f) {
+  const out = [];
+  const push = (c, stage, detail, end, act) => {
+    if (!end || end >= f) return;
+    out.push({ stage, name: c.name, detail, late: diff(end, f), end, act: Object.assign({ courseId: c.id }, act) });
+  };
+  for (const c of courses) {
+    const t = theme(c.category);
+    if (t === "nc") {
+      if (c.reviewStatus) continue;
+      (c.submissions || []).forEach((x, i) => { if (x && !x.done) push(c, "submit", x.title || `Submit lần ${i + 1}`, x.date, { kind: "research_submit", idx: i, guard: x.date, label: `${c.name} — ${x.title || "Submit"}` }); });
+    } else if (t === "tv") {
+      (c.deliverables || []).forEach((x, i) => { if (x && !x.done) push(c, "deliv", x.title || `Sản phẩm ${i + 1}`, x.date, { kind: "consulting_deliverable", idx: i, guard: x.date, label: `${c.name} — ${x.title || "Sản phẩm"}` }); });
+    } else {
+      const s = c.sessions || [];
+      const md = parseInt(c.macroDays, 10) || 0;
+      if (md > 0 && s.length && !c.macroDone) push(c, "macro", "Đề cương toàn khóa", addDays(s[0].prepStart || s[0].teachDate, -1), { kind: "macro", idx: 0, guard: "", label: c.name + " — Đề cương" });
+      s.forEach((x, i) => {
+        const title = x.title || `Buổi ${x.num || i + 1}`;
+        if (diff(x.prepStart, x.teachDate) > 0 && !x.prepDone) push(c, "prep", `Soạn ${title}`, addDays(x.teachDate, -1), { kind: "session_prep", idx: i, guard: x.teachDate, label: `${c.name} — Soạn ${title}` });
+        if (!x.teachDone) push(c, "teach", `Dạy ${title}`, x.teachDate, { kind: "session_teach", idx: i, guard: x.teachDate, label: `${c.name} — Dạy ${title}` });
+      });
+      if (c.hasEvaluation !== false) {
+        [c.evaluation, ...(c.extraEvaluations || [])].forEach((e, i) => {
+          if (e && !e.done && e.start && e.end) push(c, "eval", e.name || "Chấm thi", e.end, { kind: "eval", idx: i, guard: e.start, label: `${c.name} — ${e.name || "Chấm thi"}` });
+        });
+      }
+    }
+  }
+  out.sort((a, b) => a.end.localeCompare(b.end));
+  return out;
+}
+
+// Trạng thái đồng bộ về Mac: số việc widget đã ghi mà Mac chưa xác nhận, giờ Mac xác nhận gần nhất.
+async function syncStatus() {
+  const actions = await loadActions();
+  const ack = await loadAck();
+  const pending = actions.filter((a) => !ack.ids.has(a.id)).length;
+  let at = null;
+  if (ack.at) { const d = new Date(ack.at); if (!isNaN(d)) at = `${pad(d.getHours())}:${pad(d.getMinutes())}`; }
+  return { pending, at };
 }
 
 // ---- Widget ----
@@ -207,9 +278,10 @@ async function buildWidget(date) {
     t.font = Font.systemFont(11); t.textColor = Color.white();
     return w;
   }
-  const { items, prepCount } = workFor(courses, date);
+  const { items, prepCount, lateCount } = workFor(courses, date);
   const red = prepCount >= 3;
-  const sum = w.addText(red ? `🚨 Quá tải: ${prepCount} lớp đang chuẩn bị` : `🟢 Ổn định · ${items.length} việc`);
+  const lateTxt = lateCount ? ` · ⚠️ ${lateCount} quá hạn` : "";
+  const sum = w.addText((red ? `🚨 Quá tải: ${prepCount} lớp đang chuẩn bị` : `🟢 Ổn định · ${items.length - lateCount} việc`) + lateTxt);
   sum.font = Font.semiboldSystemFont(12);
   sum.textColor = new Color(red ? "#f87171" : "#4ade80");
   w.addSpacer(5);
@@ -228,19 +300,22 @@ async function buildWidget(date) {
       const box = r.addText(it.done ? "✓" : "○");
       box.font = Font.boldSystemFont(11); box.textColor = new Color(it.done ? "#4ade80" : "#64748b");
     }
-    const tag = r.addText(STAGES[it.stage].label);
-    tag.font = Font.boldSystemFont(9); tag.textColor = new Color(STAGES[it.stage].color);
-    const txt = r.addText(small ? it.name : `${it.name} — ${it.detail}`);
+    const tag = r.addText((it.late ? "⚠️" : "") + STAGES[it.stage].label);
+    tag.font = Font.boldSystemFont(9); tag.textColor = new Color(it.late ? "#fb923c" : STAGES[it.stage].color);
+    const txt = r.addText(small ? it.name : `${it.name} — ${it.detail}${it.late ? ` (trễ ${it.late} ngày)` : ""}`);
     txt.font = Font.systemFont(11); txt.textColor = it.done ? new Color("#64748b") : Color.white(); txt.lineLimit = 1;
     w.addSpacer(2);
   });
-  if (!small && items.some((it) => it.act)) {
-    const hint = w.addText("Chạm vào một việc để đánh dấu hoàn thành");
-    hint.font = Font.systemFont(8); hint.textColor = new Color("#64748b");
-  }
-  if (items.length > max) {
-    const m = w.addText(`+${items.length - max} việc khác`);
-    m.font = Font.systemFont(10); m.textColor = new Color("#94a3b8");
+  // Dòng cuối: số việc còn lại + trạng thái đồng bộ về Mac (gộp một dòng để vừa widget cỡ vừa)
+  const st = await syncStatus();
+  const foot = [];
+  if (items.length > max) foot.push(`+${items.length - max} việc khác`);
+  else if (!small && items.some((it) => it.act)) foot.push("Chạm ○ để hoàn thành");
+  if (st.pending) foot.push(`⏳ ${st.pending} việc chờ Mac`);
+  else if (st.at) foot.push(`✓ Mac nhận ${st.at}`);
+  if (foot.length) {
+    const m = w.addText(foot.join(" · "));
+    m.font = Font.systemFont(9); m.textColor = new Color(st.pending ? "#fbbf24" : "#94a3b8"); m.lineLimit = 1;
   }
   return w;
 }
@@ -264,30 +339,44 @@ async function toggleFromURL(param) {
   await n.schedule();
   await showWidget(readFocus());
 }
+// Chọn lần lượt nhiều việc: danh sách hiện lại sau mỗi lần chọn, bấm "Xong" để kết thúc.
 async function pickToComplete(date) {
-  const courses = await loadCourses();
-  if (!courses) return;
-  const { items } = workFor(courses, date);
-  const pending = items.filter((it) => it.act && !it.done);
-  const a = new Alert();
-  a.title = "Đánh dấu hoàn thành";
-  a.message = pending.length ? `Việc ngày ${vn(date)} — chọn việc đã xong` : "Không còn việc nào chưa xong.";
-  pending.forEach((it) => a.addAction(`${STAGES[it.stage].label} · ${it.name} — ${it.detail}`));
-  a.addCancelAction("Đóng");
-  const i = await a.presentSheet();
-  if (i >= 0) {
+  let marked = 0;
+  for (;;) {
+    const courses = await loadCourses();
+    if (!courses) return;
+    const { items } = workFor(courses, date);
+    const pending = items.filter((it) => it.act && !it.done);
+    const a = new Alert();
+    a.title = "Đánh dấu hoàn thành";
+    a.message = pending.length
+      ? `Việc ngày ${vn(date)} — chọn việc đã xong${marked ? ` (đã đánh dấu ${marked})` : ""}`
+      : (marked ? `Đã đánh dấu ${marked} việc.` : "Không còn việc nào chưa xong.");
+    pending.forEach((it) => a.addAction(`${it.late ? "⚠️ " : ""}${STAGES[it.stage].label} · ${it.name} — ${it.detail}`));
+    a.addCancelAction(marked ? "Xong" : "Đóng");
+    const i = await a.presentSheet();
+    if (i < 0 || i >= pending.length) break;
     await appendAction(pending[i].act, true);
-    await showWidget(date);
+    marked++;
   }
+  if (marked) await showWidget(date);
 }
+// Bỏ đánh dấu việc gần nhất còn đang ở trạng thái "xong" (bấm nhiều lần để lùi tiếp).
 async function undoLast() {
   const actions = await loadActions();
-  const last = actions.length ? actions[actions.length - 1] : null;
-  if (!last || !last.done) {
+  const latest = new Map();
+  actions.forEach((a) => latest.set(actionKey(a), a));
+  const last = [...latest.values()].filter((a) => a.done).sort((x, y) => String(x.at).localeCompare(String(y.at))).pop();
+  if (!last) {
     const a = new Alert(); a.title = "Không có việc nào để hoàn tác"; a.addCancelAction("Đóng"); await a.presentAlert();
     return;
   }
   await appendAction(last, false);
+  const n = new Notification();
+  n.title = "↩️ Đã bỏ đánh dấu";
+  n.body = (last.label || "") + " — sẽ đồng bộ về app Mac";
+  n.sound = null;
+  await n.schedule();
   await showWidget(readFocus());
 }
 
@@ -300,7 +389,8 @@ if (config.runsInWidget) {
   // Bấm vào widget (hoặc chạy trong app): chọn ngày / đánh dấu hoàn thành
   const a = new Alert();
   a.title = "Tải công việc";
-  a.message = `Đang xem: ${vn(readFocus())}`;
+  const st = await syncStatus();
+  a.message = `Đang xem: ${vn(readFocus())}` + (st.pending ? `\n⏳ ${st.pending} việc chờ app Mac nhận` : (st.at ? `\n✓ App Mac nhận lần cuối lúc ${st.at}` : ""));
   a.addAction("Hôm nay");
   a.addAction("Ngày mai");
   a.addAction("Chọn ngày khác…");

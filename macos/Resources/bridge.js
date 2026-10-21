@@ -56,6 +56,8 @@
     // Widget iPhone: đọc các thao tác "hoàn thành" widget đã ghi (chuỗi JSON, rỗng nếu chưa có) và ghi xác nhận đã áp dụng.
     readWidgetActions: function () { return call('readWidgetActions'); },
     writeWidgetAck: function (content) { return call('writeWidgetAck', { content: String(content) }); },
+    // { available }: đã có thư mục Scriptable trên iCloud Drive (đã cài widget) hay chưa.
+    widgetStatus: function () { return call('widgetStatus'); },
     openTextFile: function (extensions) { return call('openTextFile', { extensions: extensions || [] }); },
     listCalendars: function () { return call('listCalendars'); },
     fetchEvents: function (calendarIds) { return call('fetchEvents', { calendarIds: calendarIds || [] }); },

@@ -241,10 +241,7 @@ final class StorageMirror {
     /// Chép danh sách dự án sang thư mục Scriptable trên iCloud Drive để widget iPhone đọc (bỏ qua nếu chưa cài Scriptable).
     private func exportForWidget() {
         guard let courses = values["academic_smart_gantt"], !courses.isEmpty else { return }
-        let dir = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Mobile Documents/iCloud~dk~simonbs~Scriptable/Documents", isDirectory: true)
-        guard FileManager.default.fileExists(atPath: dir.path) else { return }
-        try? Data(courses.utf8).write(to: dir.appendingPathComponent("gantt_courses.json"), options: .atomic)
+        WidgetBridge.exportCourses(courses)
     }
 
     private func drainWaiters(_ error: Error?) {

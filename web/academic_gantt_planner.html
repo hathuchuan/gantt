@@ -1213,6 +1213,10 @@
     .auto-sync-status { font-size: 12px; color: var(--text-muted); white-space: nowrap; padding: 0 4px; cursor: pointer; }
     .auto-sync-status.bad { color: #b91c1c; }
     .auto-sync-row { display: flex; align-items: center; gap: 6px; font-size: 12px; margin: 8px 0; cursor: pointer; }
+    .widget-sync-log { list-style: none; margin: 4px 0 0; padding: 0; font-size: 12px; max-height: 160px; overflow: auto; }
+    .widget-sync-log li { padding: 3px 4px; border-top: 1px solid var(--border-light); color: var(--text); }
+    .widget-sync-log li.missing { color: var(--text-muted); text-decoration: line-through; }
+    .widget-sync-log .when { color: var(--text-muted); margin-right: 4px; }
 
     /* ===== DARK MODE ===== */
     :root[data-theme="dark"] {
@@ -1591,6 +1595,14 @@
             <button type="button" class="btn btn-primary" style="width: 100%;" onclick="syncFromMacCalendar()">🔄 Kéo Lịch Từ Apple Calendar</button>
             <button type="button" class="btn btn-secondary" style="width: 100%; margin-top: 6px;" onclick="compareWithMacCalendar()" title="Chỉ so sánh, không thay đổi dữ liệu">🔍 So sánh Gantt ↔ Apple Calendar</button>
             <div id="macCompareResult" class="mac-cal-empty" style="display:none; text-align:left; max-height:320px; overflow:auto;"></div>
+            <div id="widgetSyncBox" class="mac-cal-picker" style="display:none; margin-top:10px;">
+              <div class="mac-cal-header">
+                <span>📱 Widget iPhone → Mac</span>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="syncWidgetNow()" title="Đọc ngay các việc đã đánh dấu hoàn thành trên iPhone">↻</button>
+              </div>
+              <div class="mac-cal-empty" id="widgetSyncStatus" style="text-align:left;"></div>
+              <ul id="widgetSyncLog" class="widget-sync-log"></ul>
+            </div>
           </div>
         </div>
 
@@ -6317,6 +6329,7 @@
   function closeModal() {
     document.getElementById('editModal').className = 'modal-backdrop';
     activeCourseId = null;
+    if (hasWidgetBridge()) setTimeout(pollWidgetActions, 300); // thao tác từ iPhone bị hoãn trong lúc sửa
   }
 
   // ---- Hoàn tác / làm lại (⌘Z / ⇧⌘Z): chụp trạng thái dự án trước mỗi lần lưu ----
@@ -7126,11 +7139,16 @@
   // 21. ĐỒNG BỘ TỪ WIDGET IPHONE (ĐÁNH DẤU HOÀN THÀNH)
   // =========================================================================
   // Widget (Scriptable) ghi gantt_actions.json trong iCloud Drive; ứng dụng đọc, áp dụng rồi ghi gantt_actions_ack.json.
-  // Mỗi thao tác: { id, courseId, kind, idx, guard, done, at } — guard là ngày của khối (để nhận đúng khối nếu thứ tự đã đổi).
+  // Mỗi thao tác: { id, courseId, kind, idx, guard, label, done, at } — guard là ngày của khối (để nhận đúng khối nếu thứ tự đã đổi).
+  // Ứng dụng hỏi mỗi 15 giây, khi quay lại cửa sổ và ngay khi iCloud tải về tệp mới (native theo dõi thư mục).
   var WIDGET_APPLIED_KEY = 'academic_smart_gantt_widget_applied';
+  var WIDGET_LOG_KEY = 'academic_smart_gantt_widget_log';
   var WIDGET_POLL_MS = 15 * 1000;
+  var WIDGET_LOG_MAX = 30;
   var widgetPolling = false;
   var widgetAckWritten = false;
+  var widgetLastCheck = null;
+  var widgetAvailable = null;
 
   function hasWidgetBridge() {
     return !!(window.GanttNative && typeof window.GanttNative.readWidgetActions === 'function');
@@ -7143,6 +7161,16 @@
       s = list.filter(function(x) { return x.teachDate === a.guard; })[0] || null;
     }
     return s || null;
+  }
+
+  // guard của mốc Submit / sản phẩm là ngày của mốc: nhận đúng mốc kể cả khi danh sách đã đổi thứ tự
+  function findDatedItem(list, a) {
+    list = list || [];
+    var it = list[a.idx];
+    if (a.guard && (!it || it.date !== a.guard)) {
+      it = list.filter(function(x) { return x && x.date === a.guard; })[0] || null;
+    }
+    return it || null;
   }
 
   // Trả về true nếu tìm thấy khối (đã đặt đúng trạng thái), false nếu khối không còn tồn tại
@@ -7166,9 +7194,21 @@
       ev.done = done;
       return true;
     }
-    if (a.kind === 'research_submit') { var sub = (c.submissions || [])[a.idx]; if (!sub) return false; sub.done = done; return true; }
-    if (a.kind === 'consulting_deliverable') { var dl = (c.deliverables || [])[a.idx]; if (!dl) return false; dl.done = done; return true; }
+    if (a.kind === 'research_submit') { var sub = findDatedItem(c.submissions, a); if (!sub) return false; sub.done = done; return true; }
+    if (a.kind === 'consulting_deliverable') { var dl = findDatedItem(c.deliverables, a); if (!dl) return false; dl.done = done; return true; }
     return false;
+  }
+
+  function readWidgetLog() {
+    var log;
+    try { log = JSON.parse(readStored(WIDGET_LOG_KEY) || '[]'); } catch (e) { log = []; }
+    return Array.isArray(log) ? log : [];
+  }
+
+  function widgetActionLabel(a) {
+    if (a.label) return String(a.label);
+    var c = findCourseById(a.courseId);
+    return (c ? c.name : 'Khối đã xóa') + ' — ' + (a.kind || '');
   }
 
   async function pollWidgetActions() {
@@ -7180,6 +7220,7 @@
     var count = 0;
     try {
       var text = await window.GanttNative.readWidgetActions();
+      widgetLastCheck = new Date();
       if (!text) return 0;
       var list;
       try { list = JSON.parse(text); } catch (e) { return 0; }
@@ -7193,21 +7234,31 @@
       var fresh = list.filter(function(a) { return a && a.id && a.courseId && !seen[a.id]; });
       fresh.sort(function(x, y) { return String(x.at || '').localeCompare(String(y.at || '')); });
       if (fresh.length) {
+        var log = readWidgetLog();
+        var okLabels = [];
+        var missing = 0;
         undoSuspended = true;
         try {
           fresh.forEach(function(a) {
-            if (applyWidgetAction(a)) count++;
+            var ok = applyWidgetAction(a);
+            if (ok) { count++; okLabels.push((a.done === false ? '↩️ ' : '✅ ') + widgetActionLabel(a)); } else missing++;
             applied.push(a.id);
+            log.push({ at: new Date().toISOString(), phoneAt: a.at || '', label: widgetActionLabel(a), done: a.done !== false, ok: ok });
           });
         } finally {
           undoSuspended = false;
         }
         if (applied.length > 500) applied = applied.slice(applied.length - 500);
         writeStored(WIDGET_APPLIED_KEY, JSON.stringify(applied));
+        if (log.length > WIDGET_LOG_MAX) log = log.slice(log.length - WIDGET_LOG_MAX);
+        writeStored(WIDGET_LOG_KEY, JSON.stringify(log));
         if (count) {
           saveData();
           renderGantt();
-          showToast('📱 Widget iPhone: đã đồng bộ ' + count + ' việc hoàn thành');
+          showToast('📱 iPhone: ' + (count === 1 ? okLabels[0] : ('đã đồng bộ ' + count + ' việc · ' + okLabels[okLabels.length - 1])) +
+            (missing ? ' (' + missing + ' việc không còn khối)' : ''));
+        } else if (missing) {
+          showToast('📱 iPhone: ' + missing + ' việc không còn khối tương ứng (đã bỏ qua)');
         }
       }
       if (fresh.length || !widgetAckWritten) {
@@ -7218,12 +7269,63 @@
       /* thiếu quyền / iCloud chưa tải xong: thử lại ở lần sau */
     } finally {
       widgetPolling = false;
+      renderWidgetSyncPanel();
     }
     return count;
   }
 
+  async function syncWidgetNow() {
+    var n = await pollWidgetActions();
+    if (!n) showToast('📱 Không có việc mới từ iPhone');
+    return n;
+  }
+
+  function renderWidgetSyncPanel() {
+    var box = document.getElementById('widgetSyncBox');
+    if (!box || !hasWidgetBridge()) return;
+    box.style.display = '';
+    var status = document.getElementById('widgetSyncStatus');
+    var log = readWidgetLog();
+    var last = log.length ? log[log.length - 1] : null;
+    function when(iso) {
+      var d = new Date(iso);
+      if (isNaN(d.getTime())) return '';
+      return pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + ' ' + pad2(d.getDate()) + '/' + pad2(d.getMonth() + 1);
+    }
+    var lines = [];
+    if (widgetAvailable === false) {
+      lines.push('Chưa thấy thư mục Scriptable trên iCloud Drive: cài Scriptable trên iPhone, bật iCloud Drive (xem ios/README.md).');
+    } else {
+      lines.push('Bấm ○ trên widget iPhone để đánh dấu hoàn thành; app áp dụng trong vài giây (khi iCloud đã đồng bộ).');
+    }
+    if (last) lines.push('Lần nhận gần nhất: ' + when(last.at) + '.');
+    if (widgetLastCheck) lines.push('Kiểm tra lúc ' + pad2(widgetLastCheck.getHours()) + ':' + pad2(widgetLastCheck.getMinutes()) + ':' + pad2(widgetLastCheck.getSeconds()) + '.');
+    if (status) status.textContent = lines.join(' ');
+    var ul = document.getElementById('widgetSyncLog');
+    if (ul) {
+      ul.innerHTML = '';
+      log.slice(-8).reverse().forEach(function(e) {
+        var li = document.createElement('li');
+        if (!e.ok) { li.className = 'missing'; li.title = 'Không còn khối tương ứng (đã xóa / đổi ngày)'; }
+        var w = document.createElement('span');
+        w.className = 'when';
+        w.textContent = when(e.at);
+        li.appendChild(w);
+        li.appendChild(document.createTextNode((e.done ? '✅ ' : '↩️ ') + e.label));
+        ul.appendChild(li);
+      });
+    }
+  }
+
   function initWidgetSync() {
     if (!hasWidgetBridge()) return;
+    if (typeof window.GanttNative.widgetStatus === 'function') {
+      window.GanttNative.widgetStatus().then(function(st) {
+        widgetAvailable = !!(st && st.available);
+        renderWidgetSyncPanel();
+      }, function() {});
+    }
+    renderWidgetSyncPanel();
     setTimeout(pollWidgetActions, 2000);
     setInterval(pollWidgetActions, WIDGET_POLL_MS);
     window.addEventListener('focus', pollWidgetActions);
