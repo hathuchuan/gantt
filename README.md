@@ -102,7 +102,7 @@ Cách app giữ dữ liệu an toàn:
 - **Tìm kiếm toàn cục & lọc:** ô tìm ở đầu biểu đồ (`⌘F`, không phân biệt dấu) tìm trong tên dự án, buổi, địa điểm, tạp chí, ghi chú; danh sách kết quả bấm để nhảy tới khối. Kết hợp với lọc **loại** (chip màu), **trạng thái** (chưa xong / đang diễn ra / sắp tới / quá hạn / chờ review / hoàn thành) và **địa điểm**; nút **✕ Bỏ lọc**.
 - **Cảnh báo xung đột lịch:** hộp *Xung đột lịch* ở cột trái liệt kê (1) buổi giảng **trùng giờ** (thanh bị viền đỏ + ⚠️) và (2) tuần **quá tải** — quá 12 giờ giảng/tuần (đổi ngưỡng bằng nút ⚙️ Ngưỡng) hoặc có ngày ≥ 3 lớp cùng chuẩn bị (đầu cột thứ Hai của tuần đó có vạch cam 📊). Bấm một dòng để tới ngày đó.
 - **Ô Tải công việc:** bấm vào **bất kỳ dòng công việc** (kể cả mục quá hạn) → mở/tạo ghi chú Markdown của khối; **chuột phải** → thêm/mở ghi chú hoặc chỉnh sửa dự án (và hoàn thành, xem tuần/tháng).
-- **Widget iPhone:** có thể đánh dấu hoàn thành và tự đồng bộ về app Mac — xem `ios/README.md`.
+- **Widget iPhone:** đánh dấu hoàn thành (kể cả Submit / sản phẩm và việc quá hạn, chọn nhiều việc một lần) và tự đồng bộ về app Mac ngay khi iCloud tải về; trạng thái "chờ Mac" hiện trên widget, nhật ký nhận ở tab 🍎 Đồng Bộ Mac — xem `ios/README.md`.
 
 ## 4. Những gì thay đổi so với `sync_server.py`
 
