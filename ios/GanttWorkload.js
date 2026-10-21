@@ -24,8 +24,9 @@ const ORDER = { macro: 0, prep: 1, teach: 2, eval: 3, submit: 4, deliv: 5 };
 const fm = FileManager.iCloud();
 const pad = (n) => String(n).padStart(2, "0");
 const toStr = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-const fromStr = (s) => { const p = s.split("-").map(Number); return new Date(p[0], p[1] - 1, p[2]); };
-const vn = (s) => s.split("-").reverse().join("/");
+// Ngày thiếu / sai định dạng (vd. buổi không có ngày soạn bài) → Invalid Date thay vì làm script dừng
+const fromStr = (s) => { const p = String(s || "").split("-").map(Number); return new Date(p[0], p[1] - 1, p[2]); };
+const vn = (s) => String(s || "").split("-").reverse().join("/");
 const dayName = (s) => ["CN", "T2", "T3", "T4", "T5", "T6", "T7"][fromStr(s).getDay()];
 const today = () => toStr(new Date());
 const addDays = (s, n) => { const d = fromStr(s); d.setDate(d.getDate() + n); return toStr(d); };
@@ -321,6 +322,15 @@ async function buildWidget(date) {
 }
 
 // ---- Đánh dấu hoàn thành ----
+// Thông báo chỉ để xác nhận: thiếu quyền (iOS có thể báo nhầm là quyền Danh bạ) thì bỏ qua, việc vẫn được ghi.
+async function notify(title, label) {
+  try {
+    const n = new Notification();
+    n.title = title;
+    n.body = (label || "") + " — sẽ đồng bộ về app Mac";
+    await n.schedule();
+  } catch (e) { /* không có quyền thông báo: không sao */ }
+}
 async function showWidget(date) {
   const w = await buildWidget(date);
   if (config.widgetFamily === "small") await w.presentSmall();
@@ -332,11 +342,7 @@ async function toggleFromURL(param) {
   try { req = JSON.parse(param); } catch (e) { return; }
   if (!req || !req.act) return;
   await appendAction(req.act, req.done);
-  const n = new Notification();
-  n.title = req.done ? "✅ Đã đánh dấu hoàn thành" : "↩️ Đã bỏ đánh dấu";
-  n.body = (req.act.label || "") + " — sẽ đồng bộ về app Mac";
-  n.sound = null;
-  await n.schedule();
+  await notify(req.done ? "✅ Đã đánh dấu hoàn thành" : "↩️ Đã bỏ đánh dấu", req.act.label);
   await showWidget(readFocus());
 }
 // Chọn lần lượt nhiều việc: danh sách hiện lại sau mỗi lần chọn, bấm "Xong" để kết thúc.
@@ -372,45 +378,70 @@ async function undoLast() {
     return;
   }
   await appendAction(last, false);
-  const n = new Notification();
-  n.title = "↩️ Đã bỏ đánh dấu";
-  n.body = (last.label || "") + " — sẽ đồng bộ về app Mac";
-  n.sound = null;
-  await n.schedule();
+  await notify("↩️ Đã bỏ đánh dấu", last.label);
   await showWidget(readFocus());
 }
 
 // ---- Chạy ----
-if (config.runsInWidget) {
-  Script.setWidget(await buildWidget(readFocus()));
-} else if (args.queryParameters && args.queryParameters.toggle) {
-  await toggleFromURL(args.queryParameters.toggle);
-} else {
-  // Bấm vào widget (hoặc chạy trong app): chọn ngày / đánh dấu hoàn thành
-  const a = new Alert();
-  a.title = "Tải công việc";
-  const st = await syncStatus();
-  a.message = `Đang xem: ${vn(readFocus())}` + (st.pending ? `\n⏳ ${st.pending} việc chờ app Mac nhận` : (st.at ? `\n✓ App Mac nhận lần cuối lúc ${st.at}` : ""));
-  a.addAction("Hôm nay");
-  a.addAction("Ngày mai");
-  a.addAction("Chọn ngày khác…");
-  a.addAction("✅ Đánh dấu hoàn thành…");
-  a.addAction("↩️ Hoàn tác việc vừa xong");
-  a.addCancelAction("Đóng");
-  const i = await a.presentSheet();
-  if (i >= 0 && i <= 2) {
-    let d = null;
-    if (i === 0) d = today();
-    else if (i === 1) d = addDays(today(), 1);
-    else if (i === 2) { try { d = toStr(await DatePicker.pickDate(fromStr(readFocus()))); } catch (e) {} }
-    if (d) {
-      writeFocus(d);
-      await showWidget(d);
+// Lỗi bất kỳ: báo rõ bước nào hỏng (thay vì "Exception Occurred" chung chung) để dễ tìm nguyên nhân.
+let step = "khởi động";
+async function main() {
+  if (config.runsInWidget) {
+    step = "vẽ widget";
+    Script.setWidget(await buildWidget(readFocus()));
+  } else if (args.queryParameters && args.queryParameters.toggle) {
+    step = "đánh dấu hoàn thành từ widget";
+    await toggleFromURL(args.queryParameters.toggle);
+  } else {
+    // Bấm vào widget (hoặc chạy trong app): chọn ngày / đánh dấu hoàn thành
+    step = "đọc trạng thái đồng bộ";
+    const a = new Alert();
+    a.title = "Tải công việc";
+    const st = await syncStatus();
+    a.message = `Đang xem: ${vn(readFocus())}` + (st.pending ? `\n⏳ ${st.pending} việc chờ app Mac nhận` : (st.at ? `\n✓ App Mac nhận lần cuối lúc ${st.at}` : ""));
+    a.addAction("Hôm nay");
+    a.addAction("Ngày mai");
+    a.addAction("Chọn ngày khác…");
+    a.addAction("✅ Đánh dấu hoàn thành…");
+    a.addAction("↩️ Hoàn tác việc vừa xong");
+    a.addCancelAction("Đóng");
+    step = "mở menu";
+    const i = await a.presentSheet();
+    if (i >= 0 && i <= 2) {
+      step = "chọn ngày";
+      let d = null;
+      if (i === 0) d = today();
+      else if (i === 1) d = addDays(today(), 1);
+      else if (i === 2) { try { d = toStr(await DatePicker.pickDate(fromStr(readFocus()))); } catch (e) {} }
+      if (d) {
+        writeFocus(d);
+        step = "hiển thị widget";
+        await showWidget(d);
+      }
+    } else if (i === 3) {
+      step = "đánh dấu hoàn thành";
+      await pickToComplete(readFocus());
+    } else if (i === 4) {
+      step = "hoàn tác";
+      await undoLast();
     }
-  } else if (i === 3) {
-    await pickToComplete(readFocus());
-  } else if (i === 4) {
-    await undoLast();
+  }
+}
+try {
+  await main();
+} catch (e) {
+  const msg = `Bước: ${step}\n${e && e.message ? e.message : e}`;
+  console.error(msg);
+  if (config.runsInWidget) {
+    const w = new ListWidget();
+    w.backgroundColor = new Color("#0f172a");
+    const t = w.addText("⚠️ Lỗi widget Gantt — bấm để xem");
+    t.font = Font.boldSystemFont(12); t.textColor = new Color("#fbbf24");
+    const d = w.addText(msg);
+    d.font = Font.systemFont(10); d.textColor = Color.white();
+    Script.setWidget(w);
+  } else {
+    try { const a = new Alert(); a.title = "Lỗi script Gantt"; a.message = msg; a.addCancelAction("Đóng"); await a.presentAlert(); } catch (e2) {}
   }
 }
 Script.complete();

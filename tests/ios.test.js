@@ -17,6 +17,7 @@ async function run(files, opts) {
   opts = opts || {};
   const widgets = [];
   const notes = [];
+  const alerts = [];
   const fm = {
     documentsDirectory: () => '/docs',
     joinPath: (a, b) => a + '/' + b,
@@ -30,8 +31,8 @@ async function run(files, opts) {
   const Font = new Proxy({}, { get: () => () => ({}) });
   class Elem { constructor() { this.children = []; } addText(t) { const e = new Elem(); e.text = t; this.children.push(e); return e; } addStack() { const e = new Elem(); e.stack = true; this.children.push(e); return e; } addSpacer() {} centerAlignContent() {} }
   class ListWidget extends Elem { setPadding() {} async presentSmall() { widgets.push(this); } async presentMedium() { widgets.push(this); } async presentLarge() { widgets.push(this); } }
-  class Alert { constructor() { this.actions = []; } addAction(t) { this.actions.push(t); } addCancelAction() {} async presentSheet() { return opts.choices && opts.choices.length ? opts.choices.shift() : -1; } async presentAlert() { return 0; } }
-  class Notification { async schedule() { notes.push(this.title); } }
+  class Alert { constructor() { this.actions = []; } addAction(t) { this.actions.push(t); } addCancelAction() {} async presentSheet() { return opts.choices && opts.choices.length ? opts.choices.shift() : -1; } async presentAlert() { alerts.push(this.title + ': ' + this.message); return 0; } }
+  class Notification { async schedule() { if (opts.notifyThrows) throw new Error('Access to contacts is not granted. Grant access from the system Settings.'); notes.push(this.title); } }
   const sandbox = {
     FileManager: { iCloud: () => fm },
     Script: { name: () => 'GanttWorkload', setWidget: (w) => widgets.push(w), complete() {} },
@@ -43,7 +44,7 @@ async function run(files, opts) {
   };
   const names = Object.keys(sandbox);
   await new AsyncFunction(...names, SRC)(...names.map((n) => sandbox[n]));
-  return { widgets, notes };
+  return { widgets, notes, alerts };
 }
 function rows(w) { return w.children.filter((c) => c.stack); }
 
@@ -157,6 +158,24 @@ function rows(w) { return w.children.filter((c) => c.stack); }
   r = await run(f3, { widget: true, family: 'large' });
   const t4 = rows(r.widgets[0]).map((x) => x.children.map((c) => c.text).join(' '));
   check('Xem ngày khác: chỉ việc của ngày đó (Submit bản sửa), không kèm quá hạn', t4.length === 1 && t4[0].includes('Bản sửa'), t4);
+
+  // Thông báo bị iOS từ chối (Scriptable báo "Access to contacts is not granted"): việc vẫn được ghi, script không dừng
+  const f5 = { '/docs/gantt_courses.json': JSON.stringify(courses) };
+  let threw = null;
+  try { r = await run(f5, { notifyThrows: true, query: { toggle: JSON.stringify({ act: { courseId: 'c1', kind: 'session_prep', idx: 0, guard: ds(1), label: 'A' }, done: true }) } }); } catch (e) { threw = e.message; }
+  check('Thông báo lỗi quyền: không văng lỗi, vẫn ghi thao tác + hiện widget', !threw && r.alerts.length === 0 && JSON.parse(f5['/docs/gantt_actions.json']).length === 1 && r.widgets.length === 1, [threw, r && r.alerts]);
+  try { r = await run(f5, { notifyThrows: true, choices: [4] }); threw = null; } catch (e) { threw = e.message; }
+  check('Hoàn tác khi thông báo lỗi quyền: vẫn chạy', !threw && JSON.parse(f5['/docs/gantt_actions.json']).length === 2, threw);
+
+  // Dữ liệu thiếu ngày (buổi không có ngày soạn bài / ngày dạy) không làm script dừng
+  const f6 = { '/docs/gantt_courses.json': JSON.stringify([{ id: 'x', name: 'Lớp thiếu ngày', category: 'FSB', macroDays: 2, sessions: [{ num: 1, title: 'B1', teachDate: ds(-1) }, { num: 2 }] }]) };
+  try { r = await run(f6, { widget: true, family: 'large' }); threw = null; } catch (e) { threw = e.message; }
+  check('Buổi thiếu ngày: widget vẫn vẽ, không lỗi', !threw && r.widgets.length === 1 && !r.widgets[0].children.some((c) => c.text && c.text.includes('Lỗi')), threw || r.widgets[0].children.map((c) => c.text));
+
+  // Lỗi bất ngờ: báo rõ bước hỏng thay vì "Exception Occurred"
+  const f7 = { '/docs/gantt_courses.json': '{hỏng' };
+  try { r = await run(f7, { widget: true }); threw = null; } catch (e) { threw = e.message; }
+  check('Lỗi bất ngờ trong widget: hiện thẻ lỗi kèm bước', !threw && r.widgets[0].children.some((c) => c.text && c.text.includes('Bước: vẽ widget')), threw || r.widgets[0].children.map((c) => c.text));
 
   console.log(failures ? '\n' + failures + ' FAILURE(S)' : '\nALL PASS');
   process.exit(failures ? 1 : 0);
